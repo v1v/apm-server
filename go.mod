@@ -25,7 +25,7 @@ require (
 	github.com/google/go-cmp v0.4.0
 	github.com/google/pprof v0.0.0-20191218002539-d4f498aebedc
 	github.com/hashicorp/golang-lru v0.5.3
-	github.com/jaegertracing/jaeger v1.16.0
+	github.com/jaegertracing/jaeger v1.17.1
 	github.com/josephspurrier/goversioninfo v0.0.0-20200309025242-14b0ab84c6ca // indirect
 	github.com/jstemmer/go-junit-report v0.9.1
 	github.com/magefile/mage v1.9.0
