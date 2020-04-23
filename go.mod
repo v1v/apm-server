@@ -20,7 +20,7 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gogo/googleapis v1.3.1-0.20190914144012-b8d18e97a9a1 // indirect
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.4.0
 	github.com/google/addlicense v0.0.0-20190907113143-be125746c2c4 // indirect
 	github.com/google/go-cmp v0.4.0
 	github.com/google/pprof v0.0.0-20191218002539-d4f498aebedc
