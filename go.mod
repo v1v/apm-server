@@ -14,7 +14,7 @@ require (
 	github.com/elastic/beats/v7 v7.0.0-alpha2.0.20200325002817-387ee122a369
 	github.com/elastic/go-elasticsearch/v7 v7.5.0
 	github.com/elastic/go-elasticsearch/v8 v8.0.0-20200210103600-aff00e5adfde
-	github.com/elastic/go-licenser v0.2.1
+	github.com/elastic/go-licenser v0.3.0
 	github.com/elastic/go-ucfg v0.8.3
 	github.com/fatih/color v1.7.0
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible
