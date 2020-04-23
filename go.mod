@@ -24,7 +24,7 @@ require (
 	github.com/google/addlicense v0.0.0-20190907113143-be125746c2c4 // indirect
 	github.com/google/go-cmp v0.4.0
 	github.com/google/pprof v0.0.0-20191218002539-d4f498aebedc
-	github.com/hashicorp/golang-lru v0.5.3
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jaegertracing/jaeger v1.16.0
 	github.com/josephspurrier/goversioninfo v0.0.0-20200309025242-14b0ab84c6ca // indirect
 	github.com/jstemmer/go-junit-report v0.9.1
