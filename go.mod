@@ -45,7 +45,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
 	github.com/uber/tchannel-go v1.16.0 // indirect
-	go.elastic.co/apm v1.7.0
+	go.elastic.co/apm v1.7.2
 	go.elastic.co/apm/module/apmelasticsearch v1.7.0
 	go.elastic.co/apm/module/apmgrpc v1.7.0
 	go.elastic.co/apm/module/apmhttp v1.7.0
