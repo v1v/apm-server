@@ -16,7 +16,7 @@ require (
 	github.com/elastic/go-elasticsearch/v8 v8.0.0-20200210103600-aff00e5adfde
 	github.com/elastic/go-licenser v0.2.1
 	github.com/elastic/go-ucfg v0.8.3
-	github.com/fatih/color v1.7.0
+	github.com/fatih/color v1.9.0
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gogo/googleapis v1.3.1-0.20190914144012-b8d18e97a9a1 // indirect
