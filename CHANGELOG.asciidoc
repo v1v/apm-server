@@ -1,4 +1,5 @@
 // tag::list[]
+include::./changelogs/8.13.asciidoc[]
 * <<release-notes-8.12>>
 * <<release-notes-8.11>>
 * <<release-notes-8.10>>
