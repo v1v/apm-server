@@ -102,6 +102,10 @@ func NewBeat(args BeatParams) (*Beat, error) {
 		return nil, err
 	}
 
+	beatName := cfg.Name
+	if beatName == "" {
+		beatName = hostname
+	}
 	b := &Beat{
 		Beat: beat.Beat{
 			Info: beat.Info{
@@ -109,7 +113,7 @@ func NewBeat(args BeatParams) (*Beat, error) {
 				ElasticLicensed: args.ElasticLicensed,
 				IndexPrefix:     "apm-server",
 				Version:         version.Version,
-				Name:            hostname,
+				Name:            beatName,
 				Hostname:        hostname,
 				StartTime:       time.Now(),
 				EphemeralID:     metricreport.EphemeralID(),
@@ -260,12 +264,6 @@ func (b *Beat) Run(ctx context.Context) error {
 	defer logp.Info("%s stopped.", b.Info.Beat)
 
 	logger := logp.NewLogger("")
-	if runtime.GOARCH == "386" {
-		logger.Warn("" +
-			"deprecation notice: support for 32-bit system target " +
-			"architecture will be removed in an upcoming version",
-		)
-	}
 
 	if runtime.GOOS == "darwin" {
 		if host, err := sysinfo.Host(); err != nil {

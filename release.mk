@@ -123,7 +123,6 @@ patch-release:
 	$(MAKE) update-version-makefile VERSION=$(PROJECT_MAJOR_VERSION)\.$(PROJECT_MINOR_VERSION)
 	$(MAKE) update-version-legacy VERSION=$(NEXT_RELEASE) PREVIOUS_VERSION=$(CURRENT_RELEASE)
 	$(MAKE) create-commit COMMIT_MESSAGE="docs: update docs versions to $(CURRENT_RELEASE)"
-
 	@echo "INFO: Push changes to $(PROJECT_OWNER)/apm-server and create the relevant Pull Requests"
 	$(MAKE) create-pull-request BRANCH=update-$(NEXT_RELEASE) TARGET_BRANCH=$(RELEASE_BRANCH) TITLE="$(RELEASE_VERSION): update docs" BODY="Merge before the final Release build."
 
@@ -208,7 +207,7 @@ update-mergify:
 .PHONY: update-version
 update-version: VERSION=$${VERSION}
 update-version:
-	echo ">> update-version"
+	@echo ">> update-version"
 	if [ -f "cmd/intake-receiver/version.go" ]; then \
 		$(SED) -E -e 's#(version[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' cmd/intake-receiver/version.go; \
 	fi
