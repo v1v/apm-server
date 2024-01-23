@@ -244,6 +244,7 @@ update-version-legacy:
 	if [ -f "apmpackage/apm/manifest.yml" ]; then \
 		echo ">>> in apmpackage/apm/manifest.yml"; \
 		$(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*$(PREVIOUS_VERSION)#\1: $(VERSION)#g' apmpackage/apm/manifest.yml; \
+		echo ">>>> $(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*$(PREVIOUS_VERSION)#\1: $(VERSION)#g' apmpackage/apm/manifest.yml"; \
 		grep 'version' apmpackage/apm/manifest.yml ;\
 	fi
 
