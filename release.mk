@@ -40,7 +40,7 @@ PROJECT_OWNER ?= elastic
 RELEASE_TYPE ?= minor
 
 RELEASE_BRANCH ?= $(PROJECT_MAJOR_VERSION).$(PROJECT_MINOR_VERSION)
-CURRENT_RELEASE ?= $(shell gh api repos/elastic/apm-server/releases/latest | gh api repos/elastic/apm-server/releases | jq -r '.[].tag_name|sub("v"; ""; "") | select(. | startswith("$(RELEASE_BRANCH)"))' | sort -V | tail -n1')
+CURRENT_RELEASE ?= $(shell gh api repos/elastic/apm-server/releases/latest | gh api repos/elastic/apm-server/releases | jq -r '.[].tag_name|sub("v"; ""; "") | select(. | startswith("7"))' | sort -V | tail -n1')
 NEXT_PROJECT_MINOR_VERSION ?= $(PROJECT_MAJOR_VERSION).$(shell expr $(PROJECT_MINOR_VERSION) + 1).0
 NEXT_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) + 1)
 
