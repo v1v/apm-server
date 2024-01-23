@@ -40,7 +40,7 @@ PROJECT_OWNER ?= elastic
 RELEASE_TYPE ?= minor
 
 RELEASE_BRANCH ?= $(PROJECT_MAJOR_VERSION).$(PROJECT_MINOR_VERSION)
-CURRENT_RELEASE ?= $(shell gh api repos/elastic/apm-server/releases/latest | gh api repos/elastic/apm-server/releases | jq -r '.[].tag_name|sub("v"; ""; "") | select(. | startswith("7.17"))' | sort -V | tail -n1')
+CURRENT_RELEASE ?= $(shell gh api repos/elastic/apm-server/releases/latest | gh api repos/elastic/apm-server/releases | jq -r '.[].tag_name|sub("v"; ""; "") | select(. | startswith("7.17"))' | sort -V | tail -n1)
 NEXT_PROJECT_MINOR_VERSION ?= $(PROJECT_MAJOR_VERSION).$(shell expr $(PROJECT_MINOR_VERSION) + 1).0
 NEXT_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) + 1)
 
@@ -120,7 +120,7 @@ minor-release:
 #
 .PHONY: patch-release
 patch-release:
-	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH)"
+	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH). Current release $(CURRENT_RELEASE)"
 	$(MAKE) create-branch NAME=$(BRANCH_PATCH) BASE=$(BASE_BRANCH)
 	$(MAKE) update-version VERSION=$(RELEASE_VERSION)
 	$(MAKE) update-docs VERSION=$(RELEASE_VERSION)
@@ -226,7 +226,7 @@ update-version:
 .PHONY: update-version-legacy
 update-version-legacy: VERSION=$${VERSION} PREVIOUS_VERSION=$${PREVIOUS_VERSION}
 update-version-legacy:
-	@echo ">> update-version-legacy $(VERSION) - $(PREVIOUS_VERSION)"
+	echo ">> update-version-legacy $(VERSION) - $(PREVIOUS_VERSION)"
 	if [ -f "cmd/version.go" ]; then \
 		$(SED) -E -e 's#(defaultBeatVersion[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' cmd/version.go; \
 	fi
