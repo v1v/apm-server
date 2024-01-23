@@ -56,12 +56,6 @@ ifeq ($(RELEASE_TYPE),patch)
 	LATEST_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) - 1)
 endif
 
-
-# BASE_BRANCH select by release type (default patch)
-ifneq ($(RELEASE_VERSION),$(CURRENT_RELEASE))
-	$(error The release version is not matching the latest release version for $(RELEASE_BRANCH))
-endif
-
 #######################
 ## Templates
 #######################
@@ -125,7 +119,7 @@ minor-release:
 #  - RELEASE_VERSION
 #
 .PHONY: patch-release
-patch-release:
+patch-release: check-requirement
 	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH). Current release $(CURRENT_RELEASE)"
 	$(MAKE) create-branch NAME=$(BRANCH_PATCH) BASE=$(BASE_BRANCH)
 	$(MAKE) update-version VERSION=$(RELEASE_VERSION)
@@ -139,6 +133,13 @@ patch-release:
 ############################################
 ## Internal make goals to bump versions
 ############################################
+
+## @help:check-requirement:Check requirement needed for this release process.
+.PHONY: check-requirement
+check-requirement:
+ifneq ($(RELEASE_VERSION),$(CURRENT_RELEASE))
+	$(error The release version is not matching the latest release version for $(RELEASE_BRANCH))
+endif
 
 # Rename changelog file to generate something similar to https://github.com/elastic/apm-server/pull/12172
 .PHONY: rename-changelog
