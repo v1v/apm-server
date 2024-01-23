@@ -233,18 +233,14 @@ update-version-legacy:
 	if [ -f "cmd/version.go" ]; then \
 		echo ">>> in cmd/version.go"; \
 		$(SED) -E -e 's#(defaultBeatVersion[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' cmd/version.go; \
-		grep 'defaultBeatVersion' cmd/version.go ;\
 	fi
 	if [ -f "apmpackage/apm/changelog.yml" ]; then \
 		echo ">>> in apmpackage/apm/changelog.yml"; \
 		$(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*"$(PREVIOUS_VERSION)#\1: "$(VERSION)#g' apmpackage/apm/changelog.yml; \
-		grep 'version' apmpackage/apm/changelog.yml ;\
 	fi
 	if [ -f "apmpackage/apm/manifest.yml" ]; then \
 		echo ">>> in apmpackage/apm/manifest.yml"; \
 		$(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*$(PREVIOUS_VERSION)#\1: $(VERSION)#g' apmpackage/apm/manifest.yml; \
-		echo ">>>> $(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*$(PREVIOUS_VERSION)#\1: $(VERSION)#g' apmpackage/apm/manifest.yml"; \
-		grep 'version' apmpackage/apm/manifest.yml ;\
 	fi
 
 ## Update project version in the Makefile.
