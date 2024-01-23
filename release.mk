@@ -56,6 +56,12 @@ ifeq ($(RELEASE_TYPE),patch)
 	LATEST_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) - 1)
 endif
 
+
+# BASE_BRANCH select by release type (default patch)
+ifneq ($(RELEASE_VERSION),$(CURRENT_RELEASE))
+	$(error The release version is not matching the latest release version for $(RELEASE_BRANCH))
+endif
+
 #######################
 ## Templates
 #######################
@@ -125,7 +131,7 @@ patch-release:
 	$(MAKE) update-version VERSION=$(RELEASE_VERSION)
 	$(MAKE) update-docs VERSION=$(RELEASE_VERSION)
 	$(MAKE) update-version-makefile VERSION=$(PROJECT_MAJOR_VERSION)\.$(PROJECT_MINOR_VERSION)
-	$(MAKE) update-version-legacy VERSION=$(NEXT_RELEASE) PREVIOUS_VERSION=$(CURRENT_RELEASE)
+	$(MAKE) update-version-legacy VERSION=$(NEXT_RELEASE) PREVIOUS_VERSION=$(RELEASE_VERSION)
 	$(MAKE) create-commit COMMIT_MESSAGE="docs: update docs versions to $(RELEASE_VERSION)"
 	@echo "INFO: Push changes to $(PROJECT_OWNER)/apm-server and create the relevant Pull Requests"
 	#$(MAKE) create-pull-request BRANCH=$(BRANCH_PATCH) TARGET_BRANCH=$(BASE_BRANCH) TITLE="$(RELEASE_VERSION): update docs" BODY="Merge before the final Release build."
