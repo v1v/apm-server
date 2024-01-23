@@ -124,15 +124,15 @@ minor-release:
 #
 .PHONY: patch-release
 patch-release:
-	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH). Current release $(CURRENT_RELEASE). Next release $(NEXT_RELEASE)"
+	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH). Current release $(CURRENT_RELEASE)"
 	$(MAKE) create-branch NAME=$(BRANCH_PATCH) BASE=$(BASE_BRANCH)
-	$(MAKE) update-version VERSION=$(NEXT_RELEASE)
-	$(MAKE) update-docs VERSION=$(NEXT_RELEASE)
+	$(MAKE) update-version VERSION=$(RELEASE_VERSION)
+	$(MAKE) update-docs VERSION=$(RELEASE_VERSION)
 	$(MAKE) update-version-makefile VERSION=$(PROJECT_MAJOR_VERSION)\.$(PROJECT_MINOR_VERSION)
 	$(MAKE) update-version-legacy VERSION=$(NEXT_RELEASE) PREVIOUS_VERSION=$(CURRENT_RELEASE)
 	$(MAKE) create-commit COMMIT_MESSAGE="docs: update docs versions to $(RELEASE_VERSION)"
 	@echo "INFO: Push changes to $(PROJECT_OWNER)/apm-server and create the relevant Pull Requests"
-	#$(MAKE) create-pull-request BRANCH=$(BRANCH_PATCH) TARGET_BRANCH=$(BASE_BRANCH) TITLE="$(NEXT_RELEASE): update docs" BODY="Merge before the final Release build."
+	#$(MAKE) create-pull-request BRANCH=$(BRANCH_PATCH) TARGET_BRANCH=$(BASE_BRANCH) TITLE="$(RELEASE_VERSION): update docs" BODY="Merge before the final Release build."
 
 ############################################
 ## Internal make goals to bump versions
