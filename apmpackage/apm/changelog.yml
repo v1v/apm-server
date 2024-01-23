@@ -1,42 +1,44 @@
-# newer versions go on top
-#
-# change type can be one of: enhancement, bugfix, breaking-change
-- version: "7.17.18"
+- version: generated
+  changes:
+    - description: Placeholder
+      type: enhancement
+      link: https://github.com/elastic/apm-server/pull/123
+- version: "7.17.107.17.18"
   changes:
     - description: Placeholder
       type: bugfix
       link: https://github.com/elastic/apm-server/pull/1234
-- version: "7.17.11"
+- version: "7.17.107.17.11"
   changes:
     - description: fixed the `sampled_traces` data stream's ILM policy name
       type: bugfix
       link: https://github.com/elastic/apm-server/pull/10937
-- version: "7.17.6"
+- version: "7.17.107.17.6"
   changes:
     - description: Support TLSv1.3 and remove TLSv1.0 in the default TLS supported protocols
       type: bugfix
       link: https://github.com/elastic/apm-server/pull/8577
-- version: "7.17.2"
+- version: "7.17.107.17.2"
   changes:
     - description: added field mapping for `url.original` to traces, rum_traces, app_logs, and error_logs
       type: bugfix
       link: https://github.com/elastic/apm-server/pull/7698
-- version: "7.17.0"
+- version: "7.17.107.17.0"
   changes:
     - description: added `error.id` field to `error_logs` data stream
       type: bugfix
       link: https://github.com/elastic/apm-server/pull/7123
-- version: "7.16.2"
+- version: "7.17.107.16.2"
   changes:
     - description: added app_logs data stream
       type: enhancement
       link: https://github.com/elastic/apm-server/pull/7079
-- version: "7.16.1"
+- version: "7.17.107.16.1"
   changes:
     - description: Added `agent_config_applied` mapping to `metrics-apm.internal` data stream.
       type: bugfix
       link: https://github.com/elastic/apm-server/issues/6767
-- version: "7.16.0"
+- version: "7.17.107.16.0"
   changes:
     - description: auth.anonymous.rate_limit.{event_limit,ip_limit} defaults are now the same as in the default rate_limit struct.
       type: enhancement
@@ -59,7 +61,7 @@
     - description: added cluster privilege to package for stack monitoring
       type: enhancement
       link: https://github.com/elastic/apm-server/pull/6373
-- version: "0.5.0"
+- version: "7.17.100.5.0"
   changes:
     - description: added index sorting for internal metrics
       type: enhancement
@@ -76,7 +78,7 @@
     - description: added tail-sampling config vars
       type: enhancement
       link: https://github.com/elastic/apm-server/pull/6139
-- version: "0.4.0"
+- version: "7.17.100.4.0"
   changes:
     - description: added anonymous auth config, replace some RUM config
       type: breaking-change
@@ -84,7 +86,7 @@
     - description: updated to use new apm-server.auth config
       type: breaking-change
       link: https://github.com/elastic/apm-server/pull/5691
-- version: "0.3.0"
+- version: "7.17.100.3.0"
   changes:
     - description: added apm-server.url config
       type: enhancement
@@ -92,7 +94,7 @@
     - description: removed apm-server.kibana.api_key config
       type: enhancement
       link: https://github.com/elastic/apm-server/pull/5380
-- version: "0.2.0"
+- version: "7.17.100.2.0"
   changes:
     - description: added support for apm-server.rum.allow_service_names
       type: enhancement
@@ -100,7 +102,7 @@
     - description: added support a configurable default service environment
       type: enhancement
       link: https://github.com/elastic/apm-server/pull/4861
-- version: "0.1.0"
+- version: "7.17.100.1.0"
   changes:
     - description: initial release
       type: enhancement
