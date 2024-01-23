@@ -138,7 +138,7 @@ patch-release: check-requirement
 .PHONY: check-requirement
 check-requirement:
 ifneq ($(RELEASE_VERSION),$(CURRENT_RELEASE))
-	$(error The release version is not matching the latest release version for $(RELEASE_BRANCH))
+	$(error The release version '$(RELEASE_VERSION) is not matching the latest release version '$(CURRENT_RELEASE)' for $(RELEASE_BRANCH))
 endif
 
 # Rename changelog file to generate something similar to https://github.com/elastic/apm-server/pull/12172
