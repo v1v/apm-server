@@ -40,7 +40,6 @@ PROJECT_OWNER ?= elastic
 RELEASE_TYPE ?= minor
 
 RELEASE_BRANCH ?= $(PROJECT_MAJOR_VERSION).$(PROJECT_MINOR_VERSION)
-CURRENT_RELEASE ?= $(shell gh api repos/elastic/apm-server/releases/latest | gh api repos/elastic/apm-server/releases | jq -r '.[].tag_name|sub("v"; ""; "") | select(. | startswith("7.17"))' | sort -V | tail -n1)
 NEXT_PROJECT_MINOR_VERSION ?= $(PROJECT_MAJOR_VERSION).$(shell expr $(PROJECT_MINOR_VERSION) + 1).0
 NEXT_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) + 1)
 
@@ -119,8 +118,8 @@ minor-release:
 #  - RELEASE_VERSION
 #
 .PHONY: patch-release
-patch-release: check-requirement
-	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH). Current release $(CURRENT_RELEASE)"
+patch-release:
+	@echo "INFO: Create feature branch and update the versions. Target branch $(BASE_BRANCH)."
 	$(MAKE) create-branch NAME=$(BRANCH_PATCH) BASE=$(BASE_BRANCH)
 	$(MAKE) update-version VERSION=$(RELEASE_VERSION)
 	$(MAKE) update-docs VERSION=$(RELEASE_VERSION)
@@ -133,13 +132,6 @@ patch-release: check-requirement
 ############################################
 ## Internal make goals to bump versions
 ############################################
-
-## @help:check-requirement:Check requirement needed for this release process.
-.PHONY: check-requirement
-check-requirement:
-ifneq ($(RELEASE_VERSION),$(CURRENT_RELEASE))
-	$(error The release version '$(RELEASE_VERSION) is not matching the latest release version '$(CURRENT_RELEASE)' for $(RELEASE_BRANCH))
-endif
 
 # Rename changelog file to generate something similar to https://github.com/elastic/apm-server/pull/12172
 .PHONY: rename-changelog
