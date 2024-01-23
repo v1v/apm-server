@@ -160,6 +160,7 @@ update-changelog: VERSION=$${VERSION}
 update-changelog:
 	$(MAKE) common-changelog
 	@echo ">> update-changelog"
+	echo ">>> in CHANGELOG.asciidoc"
 	$(SED) 's#head#$(VERSION)#g' CHANGELOG.asciidoc
 
 # Common changelog file steps
@@ -180,6 +181,7 @@ update-docs: VERSION=$${VERSION}
 update-docs: setup-yq
 	@echo ">> update-docs"
 	if [ -f "./apmpackage/apm/changelog.yml" ]; then \
+		echo ">>> in ./apmpackage/apm/changelog.yml"; \
 		$(YQ) e --inplace '.[] |= with_entries((select(.value == "generated") | .value) ="$(VERSION)")' ./apmpackage/apm/changelog.yml; \
 		$(YQ) e --inplace '[{"version": "generated", "changes":[{"description": "Placeholder", "type": "enhancement", "link": "https://github.com/elastic/apm-server/pull/123"}]}] + .' ./apmpackage/apm/changelog.yml; \
 	fi
@@ -215,9 +217,11 @@ update-version: VERSION=$${VERSION}
 update-version:
 	@echo ">> update-version"
 	if [ -f "cmd/intake-receiver/version.go" ]; then \
+		echo ">>> in cmd/intake-receiver/version.go"; \
 		$(SED) -E -e 's#(version[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' cmd/intake-receiver/version.go; \
 	fi
 	if [ -f "internal/version/version.go" ]; then \
+		echo ">>> in internal/version/version.go"; \
 		$(SED) -E -e 's#(Version[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' internal/version/version.go; \
 	fi
 
@@ -228,12 +232,15 @@ update-version-legacy: VERSION=$${VERSION} PREVIOUS_VERSION=$${PREVIOUS_VERSION}
 update-version-legacy:
 	echo ">> update-version-legacy $(VERSION) - $(PREVIOUS_VERSION)"
 	if [ -f "cmd/version.go" ]; then \
+		echo ">>> in cmd/version.go"; \
 		$(SED) -E -e 's#(defaultBeatVersion[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' cmd/version.go; \
 	fi
 	if [ -f "apmpackage/apm/changelog.yml" ]; then \
+		echo ">>> in apmpackage/apm/changelog.yml"; \
 		$(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*"$(PREVIOUS_VERSION)#\1: "$(VERSION)#g' apmpackage/apm/changelog.yml; \
 	fi
 	if [ -f "apmpackage/apm/manifest.yml" ]; then \
+		echo ">>> in apmpackage/apm/manifest.yml"; \
 		$(SED) -E -e 's#(version[[:blank:]]*):[[:blank:]]*$(PREVIOUS_VERSION)#\1: $(VERSION)#g' apmpackage/apm/manifest.yml; \
 	fi
 
