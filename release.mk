@@ -127,7 +127,7 @@ patch-release:
 	$(MAKE) update-version-legacy VERSION=$(NEXT_RELEASE) PREVIOUS_VERSION=$(RELEASE_VERSION)
 	$(MAKE) create-commit COMMIT_MESSAGE="docs: update docs versions to $(NEXT_RELEASE)"
 	@echo "INFO: Push changes to $(PROJECT_OWNER)/apm-server and create the relevant Pull Requests"
-	#$(MAKE) create-pull-request BRANCH=$(BRANCH_PATCH) TARGET_BRANCH=$(BASE_BRANCH) TITLE="$(NEXT_RELEASE): update docs" BODY="Merge before the final Release build."
+	$(MAKE) create-pull-request BRANCH=$(BRANCH_PATCH) TARGET_BRANCH=$(BASE_BRANCH) TITLE="$(NEXT_RELEASE): update docs" BODY="Merge before the final Release build."
 
 ############################################
 ## Internal make goals to bump versions
