@@ -42,11 +42,7 @@ RELEASE_TYPE ?= minor
 RELEASE_BRANCH ?= $(PROJECT_MAJOR_VERSION).$(PROJECT_MINOR_VERSION)
 CURRENT_RELEASE ?= $(shell gh api repos/elastic/apm-server/releases/latest | gh api repos/elastic/apm-server/releases | jq -r '.[].tag_name|sub("v"; ""; "") | select(. | startswith("7.17"))' | sort -V | tail -n1)
 NEXT_PROJECT_MINOR_VERSION ?= $(PROJECT_MAJOR_VERSION).$(shell expr $(PROJECT_MINOR_VERSION) + 1).0
-
-RELEASE_MAJOR_VERSION ?= $(shell echo $(CURRENT_RELEASE) | cut -f1 -d.)
-RELEASE_MINOR_VERSION ?= $(shell echo $(CURRENT_RELEASE) | cut -f2 -d.)
-RELEASE_PATCH_VERSION ?= $(shell echo $(CURRENT_RELEASE) | cut -f3 -d.)
-NEXT_RELEASE ?= $(RELEASE_MAJOR_VERSION).$(RELEASE_MINOR_VERSION).$(shell expr $(RELEASE_PATCH_VERSION) + 1)
+NEXT_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) + 1)
 
 BRANCH_PATCH = update-$(NEXT_RELEASE)
 
