@@ -226,7 +226,7 @@ update-version:
 .PHONY: update-version-legacy
 update-version-legacy: VERSION=$${VERSION} PREVIOUS_VERSION=$${PREVIOUS_VERSION}
 update-version-legacy:
-	@echo ">> update-version-legacy"
+	@echo ">> update-version-legacy $(VERSION) - $(PREVIOUS_VERSION)"
 	if [ -f "cmd/version.go" ]; then \
 		$(SED) -E -e 's#(defaultBeatVersion[[:blank:]]*)=[[:blank:]]*"[0-9]+\.[0-9]+\.[0-9]+#\1= "$(VERSION)#g' cmd/version.go; \
 	fi
