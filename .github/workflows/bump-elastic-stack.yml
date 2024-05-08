@@ -10,25 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  filter:
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    outputs:
-      matrix: ${{ steps.generator.outputs.matrix }}
-    steps:
-      - id: generator
-        uses: elastic/apm-pipeline-library/.github/actions/elastic-stack-snapshot-branches@current
-
   bump-elastic-stack:
     runs-on: ubuntu-latest
-    needs: [filter]
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.filter.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
 
       - uses: elastic/apm-pipeline-library/.github/actions/updatecli@current
         with:
@@ -38,5 +23,5 @@ jobs:
           pipeline: ./.ci/bump-elastic-stack-snapshot.yml
           command: '--experimental apply'
         env:
-          BRANCH: ${{ matrix.branch }}
+          BRANCH: main
           GITHUB_ACTOR: ${{ github.actor }}
