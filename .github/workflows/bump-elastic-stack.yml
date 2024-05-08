@@ -24,4 +24,3 @@ jobs:
           command: '--experimental apply'
         env:
           BRANCH: main
-          GITHUB_ACTOR: ${{ github.actor }}
