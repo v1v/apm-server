@@ -30,17 +30,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Send slack message when started
-      id: slack-thread
-      uses: elastic/oblt-actions/slack/send@v1.8.0
-      with:
-        bot-token: ${{ inputs.slack-bot-token }}
-        channel-id: ${{ env.SLACK_CHANNEL }}
-        message: ":wave: This is the thread for the ${{ inputs.type }} release `${{ github.repository }}@${{ env.VERSION }}`. (<${{ env.JOB_URL }}|workflow run>)"
-      env:
-        VERSION: ${{ inputs.version }}
-        JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
+ 
     - id: generate
       run: |-
         echo "release-branch=${VERSION%.*}" >> "${GITHUB_OUTPUT}"
@@ -87,16 +77,3 @@ runs:
       shell: 'bash'
       env:
         TAG: 'refs/tags/v${{ steps.generate.outputs.release-version }}'
-
-    - if: failure()
-      uses: elastic/oblt-actions/slack/send@v1.8.0
-      with:
-        bot-token: ${{ inputs.slack-bot-token }}
-        channel-id: ${{ env.SLACK_CHANNEL }}
-        message: |-
-          :fire: Something went wrong with the ${{ inputs.type }} release preparation. It failed with the below error message:
-          `${{ env.FAILURE_MESSAGE }}`.
-          See <${{ env.JOB_URL }}|logs>.
-        thread-timestamp: ${{ steps.slack-thread.outputs.thread-timestamp || '' }}
-      env:
-        JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

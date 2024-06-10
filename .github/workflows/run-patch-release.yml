@@ -73,22 +73,3 @@ jobs:
           git_commit_gpgsign: true
 
       - run: make patch-release
-
-      - if: success()
-        uses: elastic/oblt-actions/slack/send@v1.9.1
-        with:
-          bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: ${{ env.SLACK_CHANNEL }}
-          message: |-
-            Feature freeze for `${{ github.repository }}@${{ env.RELEASE_VERSION }}` is Today.
-            All the relevant PRs and issues have been created.
-          thread-timestamp: ${{ needs.prepare.outputs.slack-thread || '' }}
-
-      - if: failure()
-        uses: elastic/oblt-actions/slack/send@v1.9.1
-        with:
-          bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: ${{ env.SLACK_CHANNEL }}
-          message: |-
-            :fire: Something went wrong with the patch release. See <${{ env.JOB_URL }}|logs>.
-          thread-timestamp: ${{ needs.prepare.outputs.slack-thread || '' }}
