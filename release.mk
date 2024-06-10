@@ -36,7 +36,7 @@ YQ_VERSION ?= v4.13.2
 PROJECT_MAJOR_VERSION ?= $(shell echo $(RELEASE_VERSION) | cut -f1 -d.)
 PROJECT_MINOR_VERSION ?= $(shell echo $(RELEASE_VERSION) | cut -f2 -d.)
 PROJECT_PATCH_VERSION ?= $(shell echo $(RELEASE_VERSION) | cut -f3 -d.)
-PROJECT_OWNER ?= elastic
+PROJECT_OWNER ?= v1v
 RELEASE_TYPE ?= minor
 
 CURRENT_RELEASE ?= $(shell gh release list --exclude-drafts --exclude-pre-releases --limit 10 --json tagName --jq '.[].tagName|select(. | startswith("v$(PROJECT_MAJOR_VERSION)"))' | sed 's|v||g' | sort -r | head -n 1)
