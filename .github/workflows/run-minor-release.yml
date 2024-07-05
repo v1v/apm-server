@@ -45,6 +45,7 @@ jobs:
       RELEASE_BRANCH: ${{ needs.prepare.outputs.release-branch }}
       RELEASE_TYPE: ${{ needs.prepare.outputs.release-type }}
       RELEASE_VERSION: ${{ needs.prepare.outputs.release-version }}
+      PROJECT_OWNER: v1v
     permissions:
       contents: write
     steps:
