@@ -18,7 +18,7 @@ permissions:
 
 env:
   JOB_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-  SLACK_CHANNEL: "#apm-server"
+  SLACK_CHANNEL: "#on-week-oblt-productivity"
   GH_TOKEN: ${{ secrets.APM_SERVER_RELEASE_TOKEN }}
 
 jobs:
