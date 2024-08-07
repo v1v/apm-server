@@ -1,9 +1,20 @@
 [[apm-release-notes-8.14]]
 == APM version 8.14
 
+* <<apm-release-notes-8.14.3>>
 * <<apm-release-notes-8.14.2>>
 * <<apm-release-notes-8.14.1>>
 * <<apm-release-notes-8.14.0>>
+
+[float]
+[[apm-release-notes-8.14.3]]
+=== APM version 8.14.3
+
+https://github.com/elastic/apm-server/compare/v8.14.2\...v8.14.3[View commits]
+
+[float]
+==== Bug fixes
+- Fix a performance regression if `output.elasticsearch.flush_bytes` is not specified {pull}13576[13576]
 
 [float]
 [[apm-release-notes-8.14.2]]
@@ -11,9 +22,8 @@
 
 https://github.com/elastic/apm-server/compare/v8.14.1\...v8.14.2[View commits]
 
-No significant changes.
-
-=== Added
+[float]
+==== Added
 - Optimize memory usage and disk read IO for Tail Based Sampling {pull}13464[13464]
 
 [float]
@@ -29,15 +39,6 @@ No significant changes.
 === APM version 8.14.0
 
 https://github.com/elastic/apm-server/compare/v8.13.2\...v8.14.0[View commits]
-
-[float]
-==== Breaking Changes
-
-[float]
-==== Deprecations
-
-[float]
-==== Intake API Changes
 
 [float]
 ==== Bug fixes

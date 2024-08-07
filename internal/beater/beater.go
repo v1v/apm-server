@@ -292,7 +292,7 @@ func (s *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	instrumentation, err := instrumentation.New(s.rawConfig, "apm-server", version.Version)
+	instrumentation, err := newInstrumentation(s.rawConfig)
 	if err != nil {
 		return err
 	}
@@ -537,6 +537,69 @@ func (s *Runner) Run(ctx context.Context) error {
 	return errors.Join(result, closeErr)
 }
 
+// newInstrumentation is a thin wrapper around libbeat instrumentation that
+// sets missing tracer configuration from elastic agent.
+func newInstrumentation(rawConfig *agentconfig.C) (instrumentation.Instrumentation, error) {
+	// This config struct contains missing fields from elastic agent APMConfig
+	// https://github.com/elastic/elastic-agent/blob/main/internal/pkg/core/monitoring/config/config.go#L127
+	// that are not directly handled by libbeat instrumentation below.
+	//
+	// Note that original config keys were additionally marshalled by
+	// https://github.com/elastic/elastic-agent/blob/main/pkg/component/runtime/apm_config_mapper.go#L18
+	// that's why some keys are different from the original APMConfig struct including "api_key" and "secret_token".
+	var apmCfg struct {
+		APIKey       string `config:"apikey"`
+		SecretToken  string `config:"secrettoken"`
+		GlobalLabels string `config:"globallabels"`
+		TLS          struct {
+			SkipVerify        bool   `config:"skipverify"`
+			ServerCertificate string `config:"servercert"`
+			ServerCA          string `config:"serverca"`
+		} `config:"tls"`
+	}
+	cfg, err := rawConfig.Child("instrumentation", -1)
+	if err != nil || !cfg.Enabled() {
+		// Fallback to instrumentation.New if the configs are not present or disabled.
+		return instrumentation.New(rawConfig, "apm-server", version.Version)
+	}
+	if err := cfg.Unpack(&apmCfg); err != nil {
+		return nil, err
+	}
+	const (
+		envAPIKey           = "ELASTIC_APM_API_KEY"
+		envSecretToken      = "ELASTIC_APM_SECRET_TOKEN"
+		envVerifyServerCert = "ELASTIC_APM_VERIFY_SERVER_CERT"
+		envServerCert       = "ELASTIC_APM_SERVER_CERT"
+		envCACert           = "ELASTIC_APM_SERVER_CA_CERT_FILE"
+		envGlobalLabels     = "ELASTIC_APM_GLOBAL_LABELS"
+	)
+	if apmCfg.APIKey != "" {
+		os.Setenv(envAPIKey, apmCfg.APIKey)
+		defer os.Unsetenv(envAPIKey)
+	}
+	if apmCfg.SecretToken != "" {
+		os.Setenv(envSecretToken, apmCfg.SecretToken)
+		defer os.Unsetenv(envSecretToken)
+	}
+	if apmCfg.TLS.SkipVerify {
+		os.Setenv(envVerifyServerCert, "false")
+		defer os.Unsetenv(envVerifyServerCert)
+	}
+	if apmCfg.TLS.ServerCertificate != "" {
+		os.Setenv(envServerCert, apmCfg.TLS.ServerCertificate)
+		defer os.Unsetenv(envServerCert)
+	}
+	if apmCfg.TLS.ServerCA != "" {
+		os.Setenv(envCACert, apmCfg.TLS.ServerCA)
+		defer os.Unsetenv(envCACert)
+	}
+	if len(apmCfg.GlobalLabels) > 0 {
+		os.Setenv(envGlobalLabels, apmCfg.GlobalLabels)
+		defer os.Unsetenv(envGlobalLabels)
+	}
+	return instrumentation.New(rawConfig, "apm-server", version.Version)
+}
+
 func maxConcurrentDecoders(memLimitGB float64) uint {
 	// Allow 128 concurrent decoders for each 1GB memory, limited to at most 2048.
 	const max = 2048
@@ -723,7 +786,7 @@ func (s *Runner) newFinalBatchProcessor(
 func (s *Runner) newDocappenderConfig(tracer *apm.Tracer, memLimit float64) (
 	docappender.Config, *elasticsearch.Config, error,
 ) {
-	var esConfig struct {
+	esConfig := struct {
 		*elasticsearch.Config `config:",inline"`
 		FlushBytes            string        `config:"flush_bytes"`
 		FlushInterval         time.Duration `config:"flush_interval"`
@@ -731,11 +794,12 @@ func (s *Runner) newDocappenderConfig(tracer *apm.Tracer, memLimit float64) (
 		Scaling               struct {
 			Enabled *bool `config:"enabled"`
 		} `config:"autoscaling"`
+	}{
+		// Default to 1mib flushes, which is the default for go-docappender.
+		FlushBytes:    "1 mib",
+		FlushInterval: time.Second,
+		Config:        elasticsearch.DefaultConfig(),
 	}
-	// Default to 1mib flushes, which is the default for go-docappender.
-	esConfig.FlushBytes = "1 mib"
-	esConfig.FlushInterval = time.Second
-	esConfig.Config = elasticsearch.DefaultConfig()
 	esConfig.MaxIdleConnsPerHost = 10
 
 	if err := s.elasticsearchOutputConfig.Unpack(&esConfig); err != nil {
@@ -768,6 +832,10 @@ func (s *Runner) newDocappenderConfig(tracer *apm.Tracer, memLimit float64) (
 		Scaling:           scalingCfg,
 		Logger:            zap.New(s.logger.Core(), zap.WithCaller(true)),
 		RequireDataStream: true,
+		// Use the output's max_retries to configure the go-docappender's
+		// document level retries.
+		MaxDocumentRetries:    esConfig.MaxRetries,
+		RetryOnDocumentStatus: []int{429}, // Only retry "safe" 429 responses.
 	}, memLimit, s.logger)
 	if cfg.MaxRequests != 0 {
 		esConfig.MaxIdleConnsPerHost = cfg.MaxRequests
