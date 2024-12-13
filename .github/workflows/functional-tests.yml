@@ -1,0 +1,35 @@
+---
+name: functional-tests
+
+on:
+  workflow_dispatch: ~
+  schedule:
+    - cron: '0 3 * * 1-5'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment:
+          - 'qa'
+          - 'production'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'functionaltests/go.mod'
+
+      - uses: google-github-actions/get-secretmanager-secrets@e5bb06c2ca53b244f978d33348d18317a7f263ce # v2.2.2
+        with:
+          export_to_environment: true
+          secrets: |-
+            EC_API_KEY:elastic-observability/elastic-cloud-observability-team-${{ matrix.environment }}-api-key
+
+      - run: cd functionaltests && go test -v ./
