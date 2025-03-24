@@ -1,8 +1,8 @@
 scm:
   enabled: true
-  owner: elastic
+  owner: v1v
   repository: apm-server
-  branch: main
+  branch: test/golang-bujmps
   commitusingapi: true
   # begin updatecli-compose policy values
   user: obltmachine
