@@ -97,7 +97,7 @@ minor-release:
 # BASE=$(RELEASE_BRANCH)
 # Target main and use the backport strategy
 	$(MAKE) create-branch NAME=changelog-$(RELEASE_BRANCH) BASE=main
-	$(MAKE) update-changelog VERSION=$(RELEASE_BRANCH)
+	$(MAKE) update-changelog VERSION=$(RELEASE_VERSION)
 	$(MAKE) create-commit COMMIT_MESSAGE="docs: Update changelogs for $(RELEASE_BRANCH) release"
 
 # NOTE: as long as 8.x is the branch to run releases, then we update mergify
@@ -120,7 +120,7 @@ endif
 #endif
 	$(MAKE) update-version VERSION=$(NEXT_PROJECT_MINOR_VERSION)
 	$(MAKE) create-commit COMMIT_MESSAGE="[Release] update version $(NEXT_PROJECT_MINOR_VERSION)"
-	$(MAKE) update-changelog
+	$(MAKE) update-changelog VERSION=$(RELEASE_VERSION)
 	$(MAKE) create-commit COMMIT_MESSAGE="[Release] update changelogs for $(RELEASE_BRANCH) release"
 
 	@echo "INFO: Push changes to $(PROJECT_OWNER)/apm-server and create the relevant Pull Requests"
