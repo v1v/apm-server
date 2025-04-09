@@ -48,11 +48,6 @@ NEXT_RELEASE ?= $(RELEASE_BRANCH).$(shell expr $(PROJECT_PATCH_VERSION) + 1)
 BRANCH_PATCH = update-$(NEXT_RELEASE)
 endif
 
-# for the view commits
-# NOTE: as long as 8.x is the branch to run releases, then we use base branch 8.x
-# when 8.x is not available then we use the main base branch.
-CHANGELOG_BRANCH = 8.x
-
 # BASE_BRANCH select by release type (default patch)
 ifeq ($(RELEASE_TYPE),minor)
 # NOTE: as long as 8.x is the branch to run releases, then we use base branch 8.x
@@ -68,7 +63,6 @@ endif
 
 ifeq ($(RELEASE_TYPE),major)
 	BASE_BRANCH ?= main
-	CHANGELOG_BRANCH = main
 	UPDATE_MERGIFY = true
 endif
 
@@ -142,7 +136,7 @@ endif
 #
 .PHONY: major-release
 major-release:
-# NOTE: major release uses minor-release with BASE_BRANCH=main and CHANGELOG_BRANCH=main
+# NOTE: major release uses minor-release with BASE_BRANCH=main
 	$(MAKE) minor-release
 
 # This is the contract with the GitHub action .github/workflows/run-patch-release.yml
