@@ -98,7 +98,6 @@ minor-release:
 # Target main and use the backport strategy
 	$(MAKE) create-branch NAME=changelog-$(RELEASE_BRANCH) BASE=main
 	$(MAKE) update-changelog VERSION=$(RELEASE_BRANCH)
-	$(MAKE) update-changelog
 	$(MAKE) create-commit COMMIT_MESSAGE="docs: Update changelogs for $(RELEASE_BRANCH) release"
 
 # NOTE: as long as 8.x is the branch to run releases, then we update mergify
