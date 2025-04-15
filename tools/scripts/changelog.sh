@@ -8,7 +8,7 @@ set -eou pipefail
 
 # Ugly but needed for MacOS. Sed on MacOS fails when calling sed --help with an illegal argument exception.
 # Exploit this to check if the user has a bad sed version and exit early.
-if ! sed --help >/dev/null 2>&1; then
+if ! gsed --help >/dev/null 2>&1; then
   echo "sed does not look like GNU sed. Are you running on MacOS perhaps? Install GNU sed, make it so you can call it with sed and retry"
   exit 8
 fi
@@ -44,7 +44,7 @@ updateFile() {
 EOS
   # add the rest of the file, replace next section with version
   tail -n+$LN "$file" | \
-    sed "s|## Next version.*|## $VERSION [$anchor]|g" /dev/stdin >> "$newfile"
+    gsed "s|## Next version.*|## $VERSION [$anchor]|g" /dev/stdin >> "$newfile"
   # replace breaking change file with new content
   mv "$newfile" "$file"
 }
@@ -85,7 +85,7 @@ updateIndex() {
 EOS
   # add the rest of the file, replace next section with version
   tail -n+$LN "$file" | \
-    sed "s|## version.next.*|## $VERSION [$anchor]|g" /dev/stdin >> "$newfile"
+    gsed "s|## version.next.*|## $VERSION [$anchor]|g" /dev/stdin >> "$newfile"
   # replace breaking change file with new content
   mv "$newfile" "$file"
 }
