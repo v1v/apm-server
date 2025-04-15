@@ -1,0 +1,10 @@
+[[apm-release-notes-9.1]]
+== APM version 9.1
+* <<apm-release-notes-9.1.0>>
+
+[float]
+[[apm-release-notes-9.1.0]]
+=== APM version 9.1.0
+
+https://github.com/elastic/apm-server/compare/v9.0.0\...v9.1.0[View commits]
+
