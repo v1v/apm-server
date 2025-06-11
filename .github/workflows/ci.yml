@@ -61,7 +61,18 @@ jobs:
           key: go-${{ hashFiles('go.mod') }}
           restore-keys: |
             go-
-      - run: go test -v -race ./...
+
+      - name: Install go-junit-report for using Mergify CI
+        run: go install github.com/jstemmer/go-junit-report/v2@latest
+
+      - run: go test -v -race ./... 2>&1 | go-junit-report > junit.xml
+
+      - name: Mergify CI Upload
+        if: success() || failure()
+        uses: mergifyio/gha-mergify-ci@668bd8fd12563b7816b51f69ad8a13652925ac55 #v6
+        with:
+          token: ${{ secrets.MERGIFY_TOKEN }}
+          report_path: junit.xml
 
   test-integration-server-internal:
     runs-on: ubuntu-latest
@@ -71,6 +82,10 @@ jobs:
         with:
           go-version-file: integrationservertest/go.mod
           cache: false
+
+      - name: Install go-junit-report for using Mergify CI
+        run: go install github.com/jstemmer/go-junit-report/v2@latest
+
       - uses: actions/cache@v4
         with:
           path: |
@@ -87,7 +102,14 @@ jobs:
           EC_REGION: "gcp-us-west2"
         # run integrationservertest/internal tests
         # integrationservertest themselves are run in the integration-server-test pipeline
-        run: cd ./integrationservertest && go test -v -race ./internal/...
+        run: cd ./integrationservertest && go test -v -race ./internal/... 2>&1 | go-junit-report > junit.xml
+
+      - name: Mergify CI Upload
+        if: success() || failure()
+        uses: mergifyio/gha-mergify-ci@668bd8fd12563b7816b51f69ad8a13652925ac55 #v6
+        with:
+          token: ${{ secrets.MERGIFY_TOKEN }}
+          report_path: junit.xml
 
   test-fips:
     runs-on: ubuntu-latest
@@ -97,6 +119,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+
+      - name: Install go-junit-report for using Mergify CI
+        run: go install github.com/jstemmer/go-junit-report/v2@latest
+
       - uses: actions/cache@v4
         with:
           path: |
@@ -107,7 +133,14 @@ jobs:
       - env:
           GOFIPS140: "latest"
           GODEBUG: "fips140=only"
-        run: go test -v -race -tags=requirefips ./...
+        run: go test -v -race -tags=requirefips ./... 2>&1 | go-junit-report > junit.xml
+
+      - name: Mergify CI Upload
+        if: success() || failure()
+        uses: mergifyio/gha-mergify-ci@668bd8fd12563b7816b51f69ad8a13652925ac55 #v6
+        with:
+          token: ${{ secrets.MERGIFY_TOKEN }}
+          report_path: junit.xml
 
   system-test:
     runs-on: ubuntu-latest
