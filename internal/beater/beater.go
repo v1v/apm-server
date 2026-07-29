@@ -45,12 +45,13 @@ import (
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/encoding/gzip"
 
+	"github.com/elastic/beats/v7/libbeat/beatmonitoring"
+
 	"github.com/elastic/beats/v7/libbeat/beat"
-	"github.com/elastic/beats/v7/libbeat/esleg/eslegclient"
 	"github.com/elastic/beats/v7/libbeat/instrumentation"
 	"github.com/elastic/beats/v7/libbeat/licenser"
+	"github.com/elastic/beats/v7/libbeat/management/status"
 	"github.com/elastic/beats/v7/libbeat/outputs"
-	esoutput "github.com/elastic/beats/v7/libbeat/outputs/elasticsearch"
 	"github.com/elastic/beats/v7/libbeat/publisher/pipeline"
 	"github.com/elastic/beats/v7/libbeat/publisher/pipetool"
 	agentconfig "github.com/elastic/elastic-agent-libs/config"
@@ -61,6 +62,7 @@ import (
 
 	"github.com/elastic/apm-data/model/modelpb"
 	"github.com/elastic/apm-data/model/modelprocessor"
+
 	"github.com/elastic/apm-server/internal/agentcfg"
 	"github.com/elastic/apm-server/internal/beater/auth"
 	"github.com/elastic/apm-server/internal/beater/config"
@@ -89,8 +91,9 @@ type Runner struct {
 	tracerProvider trace.TracerProvider
 	meterProvider  metric.MeterProvider
 	metricGatherer *apmotel.Gatherer
-	beatMonitoring beat.Monitoring
+	beatMonitoring beatmonitoring.Monitoring
 	listener       net.Listener
+	statusReporter status.StatusReporter
 }
 
 // RunnerParams holds parameters for NewRunner.
@@ -114,13 +117,16 @@ type RunnerParams struct {
 	MetricsGatherer *apmotel.Gatherer
 
 	// BeatMonitoring holds beat monitoring
-	BeatMonitoring beat.Monitoring
+	BeatMonitoring beatmonitoring.Monitoring
 
 	// WrapServer holds an optional WrapServerFunc, for wrapping the
 	// ServerParams and RunServerFunc used to run the APM Server.
 	//
 	// If WrapServer is nil, no wrapping will occur.
 	WrapServer WrapServerFunc
+
+	// StatusReporter holds a status reporter
+	StatusReporter status.StatusReporter
 }
 
 // NewRunner returns a new Runner that runs APM Server with the given parameters.
@@ -177,6 +183,7 @@ func NewRunner(args RunnerParams) (*Runner, error) {
 		metricGatherer: args.MetricsGatherer,
 		beatMonitoring: args.BeatMonitoring,
 		listener:       listener,
+		statusReporter: args.StatusReporter,
 	}, nil
 }
 
@@ -191,7 +198,9 @@ func (s *Runner) Run(ctx context.Context) error {
 	// timeout.
 	backgroundContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	shutdownTimeoutScheduled := make(chan struct{})
 	go func() {
+		defer close(shutdownTimeoutScheduled)
 		<-ctx.Done()
 		s.logger.Infof(
 			"stopping apm-server... waiting maximum of %s for queues to drain",
@@ -257,6 +266,13 @@ func (s *Runner) Run(ctx context.Context) error {
 			s.config.Sampling.Tail.DatabaseCacheSize, memLimitGB,
 		)
 	}
+	if s.config.Sampling.Tail.Enabled && s.config.Sampling.Tail.ReadBatchMemoryLimit == 0 {
+		// 1GB=10MB, 2GB=15MB, 4GB=25MB, ..., 32GB=165MB, 64GB=325MB
+		s.config.Sampling.Tail.ReadBatchMemoryLimit = linearScaledValue(5<<20, memLimitGB, 5<<20)
+		s.logger.Infof("Sampling.Tail.ReadBatchMemoryLimit set to %d based on %0.1fgb of memory",
+			s.config.Sampling.Tail.ReadBatchMemoryLimit, memLimitGB,
+		)
+	}
 
 	// Send config to telemetry.
 	recordAPMServerConfig(s.config, s.beatMonitoring.StateRegistry())
@@ -318,37 +334,22 @@ func (s *Runner) Run(ctx context.Context) error {
 		close(publishReady)
 		return nil
 	})
-	callbackUUID, err := esoutput.RegisterConnectCallback(func(*eslegclient.Connection, *logp.Logger) error {
-		select {
-		case <-publishReady:
-			return nil
-		default:
+	newElasticsearchClient := func(args elasticsearch.ClientParams) (*elasticsearch.Client, error) {
+		httpTransport, err := elasticsearch.NewHTTPTransport(args.Config, args.Logger)
+		if err != nil {
+			return nil, err
 		}
-		return errors.New("not ready for publishing events")
-	})
-	if err != nil {
-		return err
+		transport := &waitReadyRoundTripper{Transport: httpTransport, ready: publishReady, drain: drain}
+		return elasticsearch.NewClient(elasticsearch.ClientParams{
+			Config:    args.Config,
+			Transport: transport,
+			RetryOnError: func(_ *http.Request, err error) bool {
+				return !errors.Is(err, errServerShuttingDown)
+			},
+			Logger:         args.Logger,
+			TracerProvider: args.TracerProvider,
+		})
 	}
-	defer esoutput.DeregisterConnectCallback(callbackUUID)
-	newESClient := func(tp trace.TracerProvider) func(cfg *elasticsearch.Config, logger *logp.Logger) (*elasticsearch.Client, error) {
-		return func(cfg *elasticsearch.Config, logger *logp.Logger) (*elasticsearch.Client, error) {
-			httpTransport, err := elasticsearch.NewHTTPTransport(cfg, logger)
-			if err != nil {
-				return nil, err
-			}
-			transport := &waitReadyRoundTripper{Transport: httpTransport, ready: publishReady, drain: drain}
-			return elasticsearch.NewClientParams(elasticsearch.ClientParams{
-				Config:    cfg,
-				Transport: transport,
-				RetryOnError: func(_ *http.Request, err error) bool {
-					return !errors.Is(err, errServerShuttingDown)
-				},
-				Logger:         logger,
-				TracerProvider: tp,
-			})
-		}
-	}
-	newElasticsearchClient := newESClient(s.tracerProvider)
 
 	var sourcemapFetcher sourcemap.Fetcher
 	if s.config.RumConfig.Enabled && s.config.RumConfig.SourceMapping.Enabled {
@@ -368,7 +369,7 @@ func (s *Runner) Run(ctx context.Context) error {
 	// Create the runServer function. We start with newBaseRunServer, and then
 	// wrap depending on the configuration in order to inject behaviour.
 	runServer := newBaseRunServer(s.listener)
-	authenticator, err := auth.NewAuthenticator(s.config.AgentAuth, s.logger)
+	authenticator, err := auth.NewAuthenticator(s.config.AgentAuth, s.tracerProvider, s.logger)
 	if err != nil {
 		return err
 	}
@@ -470,10 +471,11 @@ func (s *Runner) Run(ctx context.Context) error {
 		SourcemapFetcher:       sourcemapFetcher,
 		PublishReady:           publishReady,
 		KibanaClient:           kibanaClient,
-		NewElasticsearchClient: newESClient(tracenoop.NewTracerProvider()),
+		NewElasticsearchClient: newElasticsearchClient,
 		GRPCServer:             grpcServer,
 		Semaphore:              semaphore.NewWeighted(int64(s.config.MaxConcurrentDecoders)),
 		BeatMonitoring:         s.beatMonitoring,
+		StatusReporter:         s.statusReporter,
 	}
 	if s.wrapServer != nil {
 		// Wrap the serverParams and runServer function, enabling
@@ -523,7 +525,7 @@ func (s *Runner) Run(ctx context.Context) error {
 	if tracerServerListener != nil {
 		// use a batch processor without tracing to prevent the tracing processor from sending traces to itself
 		finalTracerBatchProcessor, closeTracerFinalBatchProcessor, err := s.newFinalBatchProcessor(
-			tracer, newESClient(tracenoop.NewTracerProvider()), memLimitGB, s.logger, tracenoop.NewTracerProvider(), metricnoop.NewMeterProvider(),
+			tracer, newElasticsearchClient, memLimitGB, s.logger, tracenoop.NewTracerProvider(), metricnoop.NewMeterProvider(),
 		)
 		if err != nil {
 			return err
@@ -555,6 +557,9 @@ func (s *Runner) Run(ctx context.Context) error {
 	}
 
 	result := g.Wait()
+	// Ensure the ctx.Done shutdown path ran and scheduled timeout enforcement
+	// before Run returns. As a side effect, shutdown logging stays within Run's lifetime.
+	<-shutdownTimeoutScheduled
 	closeErr := closeFinalBatchProcessor(backgroundContext)
 	closeTracerErr := closeTracerProcessor(backgroundContext)
 	return errors.Join(result, closeErr, closeTracerErr)
@@ -663,7 +668,11 @@ func (s *Runner) waitReady(
 		if err != nil {
 			return err
 		}
-		esOutputClient, err = elasticsearch.NewClient(esConfig, s.logger)
+		esOutputClient, err = elasticsearch.NewClient(elasticsearch.ClientParams{
+			Config:         esConfig,
+			Logger:         s.logger,
+			TracerProvider: s.tracerProvider,
+		})
 		if err != nil {
 			return err
 		}
@@ -722,7 +731,7 @@ func (s *Runner) waitReady(
 // "elasticsearch", then we use docappender; otherwise we use the libbeat publisher.
 func (s *Runner) newFinalBatchProcessor(
 	tracer *apm.Tracer,
-	newElasticsearchClient func(*elasticsearch.Config, *logp.Logger) (*elasticsearch.Client, error),
+	newElasticsearchClient func(elasticsearch.ClientParams) (*elasticsearch.Client, error),
 	memLimit float64,
 	logger *logp.Logger,
 	tp trace.TracerProvider,
@@ -744,7 +753,11 @@ func (s *Runner) newFinalBatchProcessor(
 	if err != nil {
 		return nil, nil, err
 	}
-	client, err := newElasticsearchClient(esCfg, logger)
+	client, err := newElasticsearchClient(elasticsearch.ClientParams{
+		Config:         esCfg,
+		Logger:         logger,
+		TracerProvider: tp,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -897,11 +910,13 @@ func (s *Runner) newLibbeatFinalBatchProcessor(
 	if err := s.rawConfig.Unpack(&pipelineConfig); err != nil {
 		return nil, nil, fmt.Errorf("failed to unpack libbeat pipeline config: %w", err)
 	}
-	pipeline, err := pipeline.Load(beatInfo, monitors, pipelineConfig, nopProcessingSupporter{}, outputFactory)
+	pipe, err := pipeline.LoadWithSettings(beatInfo, monitors, pipelineConfig, outputFactory, pipeline.Settings{
+		Processors: nopProcessingSupporter{},
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create libbeat output pipeline: %w", err)
 	}
-	pipelineConnector := pipetool.WithACKer(pipeline, acker)
+	pipelineConnector := pipetool.WithACKer(pipe, acker)
 	publisher, err := publish.NewPublisher(pipelineConnector)
 	if err != nil {
 		return nil, nil, err
@@ -910,7 +925,7 @@ func (s *Runner) newLibbeatFinalBatchProcessor(
 		// clients need to be closed before running Close so
 		// this method needs to be called after the publisher has
 		// stopped
-		defer pipeline.Close()
+		defer pipe.Disconnect(ctx)
 		if err := publisher.Stop(ctx); err != nil {
 			return err
 		}
@@ -928,11 +943,15 @@ const sourcemapIndex = ".apm-source-map"
 func newSourcemapFetcher(
 	cfg config.SourceMapping,
 	kibanaClient *kibana.Client,
-	newElasticsearchClient func(*elasticsearch.Config, *logp.Logger) (*elasticsearch.Client, error),
+	newElasticsearchClient func(elasticsearch.ClientParams) (*elasticsearch.Client, error),
 	tp trace.TracerProvider,
 	logger *logp.Logger,
 ) (sourcemap.Fetcher, context.CancelFunc, error) {
-	esClient, err := newElasticsearchClient(cfg.ESConfig, logger)
+	esClient, err := newElasticsearchClient(elasticsearch.ClientParams{
+		Config:         cfg.ESConfig,
+		Logger:         logger,
+		TracerProvider: tp,
+	})
 	if err != nil {
 		return nil, nil, err
 	}

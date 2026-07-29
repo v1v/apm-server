@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace/noop"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/elastic/beats/v7/libbeat/common/reload"
@@ -27,6 +28,7 @@ import (
 	"github.com/elastic/apm-data/model/modelprocessor"
 	"github.com/elastic/apm-server/internal/beatcmd"
 	"github.com/elastic/apm-server/internal/beater"
+	"github.com/elastic/apm-server/internal/elasticsearch"
 	"github.com/elastic/apm-server/x-pack/apm-server/sampling"
 	"github.com/elastic/apm-server/x-pack/apm-server/sampling/eventstorage"
 )
@@ -102,7 +104,11 @@ func newProcessors(args beater.ServerParams) ([]namedProcessor, error) {
 
 func newTailSamplingProcessor(args beater.ServerParams) (*sampling.Processor, error) {
 	tailSamplingConfig := args.Config.Sampling.Tail
-	es, err := args.NewElasticsearchClient(tailSamplingConfig.ESConfig, args.Logger)
+	es, err := args.NewElasticsearchClient(elasticsearch.ClientParams{
+		Config:         tailSamplingConfig.ESConfig,
+		Logger:         args.Logger,
+		TracerProvider: noop.NewTracerProvider(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Elasticsearch client for tail-sampling: %w", err)
 	}
@@ -126,32 +132,37 @@ func newTailSamplingProcessor(args beater.ServerParams) (*sampling.Processor, er
 		}
 	}
 
-	return sampling.NewProcessor(sampling.Config{
-		BatchProcessor: args.BatchProcessor,
-		MeterProvider:  args.MeterProvider,
-		LocalSamplingConfig: sampling.LocalSamplingConfig{
-			FlushInterval:         tailSamplingConfig.Interval,
-			MaxDynamicServices:    1000,
-			Policies:              policies,
-			IngestRateDecayFactor: tailSamplingConfig.IngestRateDecayFactor,
-		},
-		RemoteSamplingConfig: sampling.RemoteSamplingConfig{
-			CompressionLevel: tailSamplingConfig.ESConfig.CompressionLevel,
-			Elasticsearch:    es,
-			SampledTracesDataStream: sampling.DataStreamConfig{
-				Type:      "traces",
-				Dataset:   "apm.sampled",
-				Namespace: args.Namespace,
+	return sampling.NewProcessor(sampling.ProcessorParams{
+		Config: sampling.Config{
+			BatchProcessor: args.BatchProcessor,
+			MeterProvider:  args.MeterProvider,
+			LocalSamplingConfig: sampling.LocalSamplingConfig{
+				FlushInterval:         tailSamplingConfig.Interval,
+				MaxDynamicServices:    1000,
+				Policies:              policies,
+				IngestRateDecayFactor: tailSamplingConfig.IngestRateDecayFactor,
 			},
-			UUID: samplerUUID.String(),
+			RemoteSamplingConfig: sampling.RemoteSamplingConfig{
+				CompressionLevel: tailSamplingConfig.ESConfig.CompressionLevel,
+				Elasticsearch:    es,
+				SampledTracesDataStream: sampling.DataStreamConfig{
+					Type:      "traces",
+					Dataset:   "apm.sampled",
+					Namespace: args.Namespace,
+				},
+				UUID: samplerUUID.String(),
+			},
+			StorageConfig: sampling.StorageConfig{
+				DB:                    db,
+				Storage:               db.NewReadWriter(tailSamplingConfig.StorageLimitParsed, tailSamplingConfig.DiskUsageThreshold),
+				TTL:                   tailSamplingConfig.TTL,
+				DiscardOnWriteFailure: tailSamplingConfig.DiscardOnWriteFailure,
+				ReadBatchMemoryLimit:  tailSamplingConfig.ReadBatchMemoryLimit,
+			},
 		},
-		StorageConfig: sampling.StorageConfig{
-			DB:                    db,
-			Storage:               db.NewReadWriter(tailSamplingConfig.StorageLimitParsed, tailSamplingConfig.DiskUsageThreshold),
-			TTL:                   tailSamplingConfig.TTL,
-			DiscardOnWriteFailure: tailSamplingConfig.DiscardOnWriteFailure,
-		},
-	}, args.Logger)
+		Logger:         args.Logger,
+		StatusReporter: args.StatusReporter,
+	})
 }
 
 func getDB(storageDir string, cacheSize uint64, mp metric.MeterProvider, logger *logp.Logger) (*eventstorage.StorageManager, error) {
@@ -263,6 +274,7 @@ func Main() error {
 				MeterProvider:   args.MeterProvider,
 				MetricsGatherer: args.MetricsGatherer,
 				BeatMonitoring:  args.BeatMonitoring,
+				StatusReporter:  args.StatusReporter,
 			})
 		},
 	)

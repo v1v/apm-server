@@ -10,17 +10,23 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/elastic/beats/v7/libbeat/management/status"
+	"github.com/elastic/beats/v7/x-pack/libbeat/statusreporterhelper"
+	"github.com/elastic/elastic-agent-libs/logp"
+
 	"github.com/elastic/apm-data/model/modelpb"
+
 	"github.com/elastic/apm-server/internal/logs"
 	"github.com/elastic/apm-server/x-pack/apm-server/sampling/eventstorage"
 	"github.com/elastic/apm-server/x-pack/apm-server/sampling/pubsub"
-	"github.com/elastic/elastic-agent-libs/logp"
 )
 
 const (
@@ -40,12 +46,20 @@ type Processor struct {
 	rateLimitedLogger *logp.Logger
 	groups            *traceGroups
 
-	eventStore   eventstorage.RW
-	eventMetrics eventMetrics
+	eventStore     eventstorage.RW
+	eventMetrics   eventMetrics
+	shardLock      *shardLock
+	statusReporter status.StatusReporter
 
 	stopMu   sync.Mutex
 	stopping chan struct{}
 	stopped  chan struct{}
+}
+
+type ProcessorParams struct {
+	Config         Config
+	Logger         *logp.Logger
+	StatusReporter status.StatusReporter
 }
 
 type eventMetrics struct {
@@ -58,7 +72,9 @@ type eventMetrics struct {
 }
 
 // NewProcessor returns a new Processor, for tail-sampling trace events.
-func NewProcessor(config Config, logger *logp.Logger) (*Processor, error) {
+func NewProcessor(params ProcessorParams) (*Processor, error) {
+	config := params.Config
+	logger := params.Logger
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid tail-sampling config: %w", err)
 	}
@@ -72,6 +88,8 @@ func NewProcessor(config Config, logger *logp.Logger) (*Processor, error) {
 		rateLimitedLogger: logger.WithOptions(logs.WithRateLimit(loggerRateLimit)),
 		groups:            newTraceGroups(meter, config.Policies, config.MaxDynamicServices, config.IngestRateDecayFactor),
 		eventStore:        config.Storage,
+		shardLock:         newShardLock(runtime.GOMAXPROCS(0)),
+		statusReporter:    statusreporterhelper.New(params.StatusReporter, params.Logger, "apm sampling processor"),
 		stopping:          make(chan struct{}),
 		stopped:           make(chan struct{}),
 	}
@@ -119,13 +137,16 @@ func (p *Processor) ProcessBatch(ctx context.Context, batch *modelpb.Batch) erro
 		if err != nil {
 			failed = true
 			stored = false
+			var msg string
 			if p.config.DiscardOnWriteFailure {
 				report = false
-				p.rateLimitedLogger.With(logp.Error(err)).Warn("processing trace failed, discarding by default")
+				msg = "processing trace failed, discarding by default"
 			} else {
 				report = true
-				p.rateLimitedLogger.With(logp.Error(err)).Warn("processing trace failed, indexing by default")
+				msg = "processing trace failed, indexing by default"
 			}
+			p.rateLimitedLogger.With(logp.Error(err)).Warn(msg)
+			p.statusReporter.UpdateStatus(status.Degraded, "sampling: "+msg+": "+err.Error())
 		}
 
 		if !report {
@@ -134,6 +155,10 @@ func (p *Processor) ProcessBatch(ctx context.Context, batch *modelpb.Batch) erro
 			events[i], events[n-1] = events[n-1], events[i]
 			events = events[:n-1]
 			i--
+		}
+
+		if stored {
+			p.statusReporter.UpdateStatus(status.Running, "")
 		}
 
 		p.updateProcessorMetrics(report, stored, failed)
@@ -169,6 +194,9 @@ func (p *Processor) processTransaction(event *modelpb.APMEvent) (report, stored 
 		p.eventMetrics.headUnsampled.Add(context.Background(), 1)
 		return true, false, nil
 	}
+
+	p.shardLock.RLock(event.Trace.Id)
+	defer p.shardLock.RUnlock(event.Trace.Id)
 
 	traceSampled, err := p.eventStore.IsTraceSampled(event.Trace.Id)
 	switch err {
@@ -230,6 +258,9 @@ sampling policies without service name specified.
 }
 
 func (p *Processor) processSpan(event *modelpb.APMEvent) (report, stored bool, _ error) {
+	p.shardLock.RLock(event.Trace.Id)
+	defer p.shardLock.RUnlock(event.Trace.Id)
+
 	traceSampled, err := p.eventStore.IsTraceSampled(event.Trace.Id)
 	if err != nil {
 		if err == eventstorage.ErrNotFound {
@@ -359,7 +390,6 @@ func (p *Processor) Run() error {
 			case <-p.stopping:
 			case <-p.stopped:
 			}
-
 		}()
 		return pubsub.SubscribeSampledTraceIDs(
 			ctx, initialSubscriberPosition, remoteSampledTraceIDs, subscriberPositions,
@@ -410,11 +440,11 @@ func (p *Processor) Run() error {
 		}
 	})
 	g.Go(func() error {
-		var events modelpb.Batch
 		// TODO(axw) pace the publishing over the flush interval?
 		// Alternatively we can rely on backpressure from the reporter,
 		// removing the artificial one second timeout from publisher code
 		// and just waiting as long as it takes here.
+		var events modelpb.Batch
 		remoteSampledTraceIDs := remoteSampledTraceIDs
 		localSampledTraceIDs := localSampledTraceIDs
 		for {
@@ -443,21 +473,19 @@ func (p *Processor) Run() error {
 				}
 			}
 
+			// We lock before WriteTraceSampled here to prevent race condition with IsTraceSampled from incoming events.
+			p.shardLock.Lock(traceID)
 			if err := p.eventStore.WriteTraceSampled(traceID, true); err != nil {
 				p.rateLimitedLogger.Warnf(
 					"received error writing sampled trace: %s", err,
 				)
 			}
+			p.shardLock.Unlock(traceID)
 
-			events = events[:0]
-			if err := p.eventStore.ReadTraceEvents(traceID, &events); err != nil {
-				p.rateLimitedLogger.Warnf(
-					"received error reading trace events: %s", err,
-				)
-				continue
-			}
-			if n := len(events); n > 0 {
-				p.logger.Debugf("reporting %d events", n)
+			// Read and publish trace events in pages to bound memory
+			// usage for huge traces that could otherwise cause OOM.
+			var totalEvents int64
+			err = p.eventStore.ReadTraceEventsCallback(traceID, p.config.ReadBatchMemoryLimit, &events, func(events modelpb.Batch) error {
 				if remoteDecision {
 					// Remote decisions may be received multiple times,
 					// e.g. if this server restarts and resubscribes to
@@ -482,14 +510,18 @@ func (p *Processor) Run() error {
 						}
 					}
 				}
-				p.eventMetrics.sampled.Add(gracefulContext, int64(len(events)))
-				if err := p.config.BatchProcessor.ProcessBatch(gracefulContext, &events); err != nil {
-					p.logger.With(logp.Error(err)).Warn("failed to report events")
-				}
-
-				for i := range events {
-					events[i] = nil // not required but ensure that there is no ref to the freed event
-				}
+				n := int64(len(events))
+				totalEvents += n
+				p.eventMetrics.sampled.Add(gracefulContext, n)
+				return p.config.BatchProcessor.ProcessBatch(gracefulContext, &events)
+			})
+			if err != nil {
+				p.rateLimitedLogger.Warnf(
+					"received error reading trace events: %s", err,
+				)
+			}
+			if totalEvents > 0 {
+				p.logger.Debugf("reporting %d events", totalEvents)
 			}
 		}
 	})
@@ -535,4 +567,38 @@ func sendTraceIDs(ctx context.Context, out chan<- string, traceIDs []string) err
 		}
 	}
 	return nil
+}
+
+type shardLock struct {
+	locks []sync.RWMutex
+}
+
+func newShardLock(numShards int) *shardLock {
+	if numShards <= 0 {
+		panic("shardLock numShards must be greater than zero")
+	}
+	locks := make([]sync.RWMutex, numShards)
+	return &shardLock{locks: locks}
+}
+
+func (s *shardLock) Lock(id string) {
+	s.getLock(id).Lock()
+}
+
+func (s *shardLock) Unlock(id string) {
+	s.getLock(id).Unlock()
+}
+
+func (s *shardLock) RLock(id string) {
+	s.getLock(id).RLock()
+}
+
+func (s *shardLock) RUnlock(id string) {
+	s.getLock(id).RUnlock()
+}
+
+func (s *shardLock) getLock(id string) *sync.RWMutex {
+	var h xxhash.Digest
+	_, _ = h.WriteString(id)
+	return &s.locks[h.Sum64()%uint64(len(s.locks))]
 }

@@ -2,14 +2,16 @@ commands_restrictions:
   backport:
     conditions:
       - or:
-        - sender-permission>=write
-        - sender=github-actions[bot]
+          - sender-permission>=write
+          - sender=github-actions[bot]
 queue_rules:
   - name: default
     merge_method: squash
-    conditions:
+    merge_conditions:
       - check-success=test (macos-latest)
-      - check-success=test (windows-2025)
+      - or:
+          - check-success=test (windows-2025)
+          - check-success=test (windows-latest)
       - check-success=system-test
       - check-success=lint
       - check-success=CLA
@@ -26,16 +28,16 @@ pull_request_rules:
     conditions:
       - conflict
     actions:
-        comment:
-          message: |
-            This pull request is now in conflicts. Could you fix it @{{author}}? 🙏
-            To fixup this pull request, you can check out it locally. See documentation: https://help.github.com/articles/checking-out-pull-requests-locally/
-            ```
-            git fetch upstream
-            git checkout -b {{head}} upstream/{{head}}
-            git merge upstream/{{base}}
-            git push upstream {{head}}
-            ```
+      comment:
+        message: |
+          This pull request is now in conflicts. Could you fix it @{{author}}? 🙏
+          To fixup this pull request, you can check out it locally. See documentation: https://help.github.com/articles/checking-out-pull-requests-locally/
+          ```
+          git fetch upstream
+          git checkout -b {{head}} upstream/{{head}}
+          git merge upstream/{{base}}
+          git push upstream {{head}}
+          ```
   - name: backport patches to 8.4 branch
     conditions:
       - merged
@@ -134,16 +136,6 @@ pull_request_rules:
     actions:
       queue:
         name: default
-  - name: delete updatecli branch after merging/closing it
-    conditions:
-      - or:
-        - merged
-        - closed
-      - and:
-        - label=automation
-        - head~=^updatecli
-    actions:
-      delete_head_branch:
   - name: notify the backport policy
     conditions:
       - -label~=^backport
@@ -154,11 +146,9 @@ pull_request_rules:
           This pull request does not have a backport label. Could you fix it @{{author}}? 🙏
           To fixup this pull request, you need to add the backport labels for the needed
           branches, such as:
-          * `backport-7.17` is the label to automatically backport to the 7.17 branch.
-          * `backport-8./d` is the label to automatically backport to the `8./d` branch. `/d` is the digit.
+          * `backport-8.19` is the label to automatically backport to the 8.19 branch.
           * `backport-9./d` is the label to automatically backport to the `9./d` branch. `/d` is the digit.
           * `backport-active-all` is the label that automatically backports to all active branches.
-          * `backport-active-8` is the label that automatically backports to all active minor branches for the 8 major.
           * `backport-active-9` is the label that automatically backports to all active minor branches for the 9 major.
   - name: remove backport-skip label
     conditions:
@@ -348,3 +338,21 @@ pull_request_rules:
       backport:
         branches:
           - "9.2"
+  - name: backport patches to 9.3 branch
+    conditions:
+      - merged
+      - base=main
+      - label=backport-9.3
+    actions:
+      backport:
+        branches:
+          - "9.3"
+  - name: backport patches to 9.4 branch
+    conditions:
+      - merged
+      - base=main
+      - label=backport-9.4
+    actions:
+      backport:
+        branches:
+          - "9.4"

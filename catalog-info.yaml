@@ -37,6 +37,12 @@ spec:
       branch_configuration: "main 7.* 8.* 9.*"
       repository: elastic/apm-server
       pipeline_file: ".buildkite/package.yml"
+      initial_step_plugins:
+        - sparse-checkout#v1.6.0:
+            paths:
+              - .buildkite
+              - go.mod
+            cleanup_sparse_state: true
       provider_settings:
         build_branches: true
         build_pull_requests: true
@@ -45,18 +51,51 @@ spec:
         filter_condition: >-
           build.pull_request.id == null || (build.creator.name == 'elasticmachine' && build.pull_request.id != null)
       cancel_intermediate_builds: true
-      cancel_intermediate_builds_branch_filter: "!main !7.* !8.* !9.*"
+      cancel_intermediate_builds_branch_filter: "!main !8.* !9.*"
       skip_intermediate_builds: true
-      skip_intermediate_builds_branch_filter: "!main !7.* !8.* !9.*"
+      skip_intermediate_builds_branch_filter: "!main !8.* !9.*"
       teams:
         obs-ds-intake-services: {}
         observablt-robots: {}
         everyone:
           access_level: READ_ONLY
       env:
-        ELASTIC_PR_COMMENTS_ENABLED: 'true'
-      schedules:
-        Weekly 7.17:
-          branch: "7.17"
-          cronline: "@weekly"
-          message: Builds `7.17` DRA
+        ELASTIC_PR_COMMENTS_ENABLED: "true"
+        SLACK_NOTIFICATIONS_SKIP_FOR_RETRIES: "true"
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: buildkite-pipeline-apm-server-version-bump
+  description: Buildkite Pipeline for APM Server Version Bump
+  links:
+    - title: Pipeline
+      url: https://buildkite.com/elastic/apm-server-version-bump
+
+spec:
+  type: buildkite-pipeline
+  owner: group:obs-ds-intake-services
+  system: buildkite
+  implementation:
+    apiVersion: buildkite.elastic.dev/v1
+    kind: Pipeline
+    metadata:
+      name: apm-server-version-bump
+    spec:
+      branch_configuration: "main"
+      repository: elastic/apm-server
+      pipeline_file: ".buildkite/version-bump-pipeline.yml"
+      provider_settings:
+        trigger_mode: none
+      cancel_intermediate_builds: true
+      cancel_intermediate_builds_branch_filter: "!main"
+      skip_intermediate_builds: true
+      skip_intermediate_builds_branch_filter: "!main"
+      teams:
+        obs-ds-intake-services: {}
+        observablt-robots: {}
+        artifact-management:
+          access_level: BUILD_AND_READ
+        everyone:
+          access_level: READ_ONLY

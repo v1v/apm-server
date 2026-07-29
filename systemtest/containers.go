@@ -38,7 +38,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/docker/go-connections/nat"
+	mobycontainer "github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -72,6 +72,16 @@ func StartStackContainers() error {
 		"docker", "compose", "-f", "../docker-compose.yml",
 		"up", "-d", "elasticsearch", "kibana",
 	)
+	// Workaround docker compose error due to MD5 hash usage
+	// under FIPS mode (GODEBUG=fips140=only) by filtering out GODEBUG from environment
+	// https://github.com/elastic/apm-server/issues/20369
+	var env []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GODEBUG=") {
+			env = append(env, e)
+		}
+	}
+	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -319,7 +329,7 @@ func (c *ElasticAgentContainer) Start() error {
 		}
 		c.Addrs = make(map[string]string)
 		for _, exposedPort := range c.request.ExposedPorts {
-			mappedPort, err := container.MappedPort(ctx, nat.Port(exposedPort))
+			mappedPort, err := container.MappedPort(ctx, exposedPort)
 			if err != nil {
 				return err
 			}
@@ -387,7 +397,7 @@ func (c *ElasticAgentContainer) APMServerLog() (io.ReadCloser, error) {
 }
 
 // Wait waits for the container process to exit, and returns its state.
-func (c *ElasticAgentContainer) Wait(ctx context.Context) (*types.ContainerState, error) {
+func (c *ElasticAgentContainer) Wait(ctx context.Context) (*mobycontainer.State, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

@@ -20,6 +20,7 @@ package monitoringtest
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -42,12 +43,48 @@ func ExpectContainOtelMetrics(
 	assertOtelMetrics(t, reader, expectedMetrics, false, false)
 }
 
+func ExpectContainAndNotContainOtelMetrics(
+	t *testing.T,
+	reader sdkmetric.Reader,
+	expectedMetrics map[string]any,
+	notExpectedMetricKeys []string,
+) {
+	foundMetricKeys := assertOtelMetrics(t, reader, expectedMetrics, false, false)
+	for _, key := range notExpectedMetricKeys {
+		assert.NotContains(t, foundMetricKeys, key)
+	}
+}
+
 func ExpectContainOtelMetricsKeys(t assert.TestingT, reader sdkmetric.Reader, expectedMetricsKeys []string) {
 	expectedMetrics := make(map[string]any)
 	for _, metricKey := range expectedMetricsKeys {
 		expectedMetrics[metricKey] = nil
 	}
 	assertOtelMetrics(t, reader, expectedMetrics, false, true)
+}
+
+func ExpectContainOtelMetricsEventually(
+	t *testing.T,
+	reader sdkmetric.Reader,
+	expectedMetrics map[string]any,
+	timeout time.Duration,
+	interval time.Duration,
+) {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assertOtelMetrics(c, reader, expectedMetrics, false, false)
+	}, timeout, interval)
+}
+
+func ExpectContainOtelMetricsKeysEventually(
+	t *testing.T,
+	reader sdkmetric.Reader,
+	expectedMetricsKeys []string,
+	timeout time.Duration,
+	interval time.Duration,
+) {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		ExpectContainOtelMetricsKeys(c, reader, expectedMetricsKeys)
+	}, timeout, interval)
 }
 
 // assertOtelMetrics gathers all the metrics from `reader` and asserts that the value of those gathered metrics
@@ -62,7 +99,7 @@ func assertOtelMetrics(
 	reader sdkmetric.Reader,
 	expectedMetrics map[string]any,
 	fullMatch, skipValAssert bool,
-) {
+) []string {
 	var rm metricdata.ResourceMetrics
 	assert.NoError(t, reader.Collect(context.Background(), &rm))
 
@@ -72,6 +109,19 @@ func assertOtelMetrics(
 		for _, m := range sm.Metrics {
 			switch d := m.Data.(type) {
 			case metricdata.Gauge[int64]:
+				assert.Equal(t, 1, len(d.DataPoints))
+				foundMetrics = append(foundMetrics, m.Name)
+				if skipValAssert {
+					continue
+				}
+
+				if v, ok := expectedMetrics[m.Name]; ok {
+					assert.EqualValues(t, v, d.DataPoints[0].Value, m.Name)
+				} else if fullMatch {
+					assert.Fail(t, "unexpected metric", m.Name)
+				}
+
+			case metricdata.Gauge[float64]:
 				assert.Equal(t, 1, len(d.DataPoints))
 				foundMetrics = append(foundMetrics, m.Name)
 				if skipValAssert {
@@ -118,8 +168,9 @@ func assertOtelMetrics(
 		expectedMetricsKeys = append(expectedMetricsKeys, k)
 	}
 	if fullMatch {
-		assert.ElementsMatch(t, expectedMetricsKeys, foundMetrics)
+		assert.ElementsMatch(t, foundMetrics, expectedMetricsKeys)
 	} else {
 		assert.Subset(t, foundMetrics, expectedMetricsKeys)
 	}
+	return foundMetrics
 }

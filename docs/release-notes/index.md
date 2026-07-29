@@ -20,24 +20,157 @@ To check for security updates, go to [Security announcements for the Elastic sta
 
 % ### Features and enhancements [apm-next-features-enhancements]
 % * 1 sentence describing the change. ([#PR number](https://github.com/elastic/apm-server/pull/PR number))
-% * Do not generate metrics or traces for pubsub bulk requests ([#18891](https://github.com/elastic/integrations/pull/18891))
 
 % ### Fixes [apm-next-fixes]
 % * 1 sentence describing the change. ([#PR number](https://github.com/elastic/apm-server/pull/PR number))
 
-## 9.2.0 [apm-9.2.0-release-notes]
+## 9.4.0 [apm-9.4.0-release-notes]
 
-```{applies_to}
-stack: ga 9.2
-```
+% ### Features and enhancements [apm-9.4.0-features-enhancements]
+% * 1 sentence describing the change. ([#PR number](https://github.com/elastic/apm-server/pull/PR number))
+
+_No new features or enhancements_ 
+
+% ### Fixes [apm-9.4.0-fixes]
+% * 1 sentence describing the change. ([#PR number](https://github.com/elastic/apm-server/pull/PR number))
+
+_No new fixes_ 
+
+## 9.4.1 [apm-9.4.1-release-notes]
+
+### Fixes [apm-9.4.1-fixes]
+
+* Bound Tail-Based Sampling memory usage when reading sampled trace events by implementing paging ([#20881](https://github.com/elastic/apm-server/pull/20881))
+
+## 9.4.0 [apm-9.4.0-release-notes]
+
+### Features and enhancements [apm-9.4.0-features-enhancements]
+
+* Report APM Server status on major health issues ([#20166](https://github.com/elastic/apm-server/pull/20166))
+
+### Fixes [apm-9.4.0-fixes]
+
+* Fixed HTTP/2 connections being dropped by strict clients and browser-based RUM agents due to APM Server sending inconsistent SETTINGS frames at connection start. ([#20913](https://github.com/elastic/apm-server/pull/20913)). For more details, refer to our known issues [page](https://www.elastic.co/docs/release-notes/apm/known-issues)
+
+## 9.3.4 [apm-9.3.4-release-notes]
+
+### Fixes [apm-9.3.4-fixes]
+
+* Fixed HTTP/2 connections being dropped by strict clients and browser-based RUM agents due to APM Server sending inconsistent SETTINGS frames at connection start. ([#20913](https://github.com/elastic/apm-server/pull/20913)). For more details, refer to our known issues [page](https://www.elastic.co/docs/release-notes/apm/known-issues)
+
+## 9.3.3 [apm-9.3.3-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.3.2 [apm-9.3.2-release-notes]
+
+### Features and enhancements [apm-9.3.2-features-enhancements]
+
+* Add new storage and disk metrics for Tail Based Sampling ([#20478](https://github.com/elastic/apm-server/pull/20478))
+
+### Fixes [apm-9.3.2-fixes]
+
+* Fix `timestamp.us` explicit mapping ([#elasticsearch/143593](https://github.com/elastic/elasticsearch/pull/143593))
+
+## 9.3.1 [apm-9.3.1-release-notes]
+
+### Fixes [apm-9.3.1-fixes]
+
+* Fix potential data race in Tail Based Sampling ([#20140](https://github.com/elastic/apm-server/pull/20140))
+* Fix self-instrumentation missing span kind in some traces ([#20210](https://github.com/elastic/apm-server/pull/20210)) ([#20213](https://github.com/elastic/apm-server/pull/20213))
+
+## 9.3.0 [apm-9.3.0-release-notes]
+
+% ### Features and enhancements [apm-9.3.0-features-enhancements]
+% * 1 sentence describing the change. ([#PR number](https://github.com/elastic/apm-server/pull/PR number))
+
+_No new features or enhancements_ 
+
+% ### Fixes [apm-9.3.0-fixes]
+% * 1 sentence describing the change. ([#PR number](https://github.com/elastic/apm-server/pull/PR number))
+
+_No new fixes_ 
+
+## 9.2.8 [apm-9.2.8-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.2.7 [apm-9.2.7-release-notes]
+
+### Features and enhancements [apm-9.2.7-features-enhancements]
+
+* Add new storage and disk metrics for Tail Based Sampling ([#20477](https://github.com/elastic/apm-server/pull/20477))
+
+### Fixes [apm-9.2.7-fixes]
+
+* Fix `timestamp.us` explicit mapping ([#elasticsearch/143594](https://github.com/elastic/elasticsearch/pull/143594))
+
+## 9.2.6 [apm-9.2.6-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.2.5 [apm-9.2.5-release-notes]
+
+### Fixes [apm-9.2.5-fixes]
+
+* Fix potential data race in Tail Based Sampling ([#20139](https://github.com/elastic/apm-server/pull/20139))
+* Fix self-instrumentation missing span kind in some traces ([#20199](https://github.com/elastic/apm-server/pull/20199)) ([#20212](https://github.com/elastic/apm-server/pull/20212))
+
+## 9.2.4 [apm-9.2.4-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.2.3 [apm-9.2.3-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.2.2 [apm-9.2.2-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.2.1 [apm-9.2.1-release-notes]
+
+### Fixes [apm-9.2.1-fixes]
+
+* Fix build pipeline to ensure resulting binary info shows `vcs.modified=false` ([#19252](https://github.com/elastic/apm-server/pull/19252))
+
+## 9.2.0 [apm-9.2.0-release-notes]
 
 ### Features and enhancements [apm-9.2.0-features-enhancements]
 
 * [Failure store](https://www.elastic.co/docs/manage-data/data-store/data-streams/failure-store) enabled for all new datastreams. This is applied through [elasticsearch#131296](https://github.com/elastic/elasticsearch/pull/131296) and [elasticsearch#131395](https://github.com/elastic/elasticsearch/pull/131395)
 
+### Fixes [apm-9.2.0-fixes]
+
+* Fix `output.elasticsearch.bulk_requests.available` metric to correctly report the available bulk indexers [#18953](https://github.com/elastic/apm-server/pull/18953)
+
+## 9.1.10 [apm-9.1.10-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.1.9 [apm-9.1.9-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.1.8 [apm-9.1.8-release-notes]
+
+_No new features, enhancements, or fixes._
+
+## 9.1.7 [apm-9.1.7-release-notes]
+
+### Fixes [apm-9.1.7-fixes]
+
+* Fix build pipeline to ensure resulting binary info shows `vcs.modified=false` ([#19252](https://github.com/elastic/apm-server/pull/19252))
+
+## 9.1.6 [apm-9.1.6-release-notes]
+
+### Fixes [apm-9.1.6-fixes]
+
+* Fix `output.elasticsearch.bulk_requests.available` metric to correctly report the available bulk indexers [#18953](https://github.com/elastic/apm-server/pull/18953)
+
 ## 9.1.5 [apm-9.1.5-release-notes]
 
-### Fixes [apm-9.1.0-fixes]
+### Fixes [apm-9.1.5-fixes]
 
 * APM Integration on ECH or ECE uses recommended frozen values for infrastructure related configs. The fix is applied through [kibana#235306](https://github.com/elastic/kibana/pull/235306)
 

@@ -12,6 +12,7 @@ GOTESTFLAGS?=-v
 
 # Prevent unintended modifications of go.[mod|sum]
 GOMODFLAG?=-mod=readonly
+DEFAULT_TAGS=grpcnotrace,pebblegozstd,nooteloutput
 
 PYTHON_ENV?=.
 PYTHON_VENV_DIR:=$(PYTHON_ENV)/build/ve/$(shell go env GOOS)
@@ -57,7 +58,7 @@ $(APM_SERVER_FIPS_BINARIES):
 	docker container rm apm-server-fips-cont || true
 	docker image rm apm-server-fips-image-temp || true
 	# rely on Dockerfile.fips to use the go fips toolchain
-	docker buildx build --load --platform "$(GOOS)/$(GOARCH)" --build-arg GOLANG_VERSION="$(shell go list -m -f '{{.Version}}' go)" -f ./packaging/docker/Dockerfile.fips -t apm-server-fips-image-temp .
+	docker buildx build --load --platform "$(GOOS)/$(GOARCH)" --build-arg GOLANG_VERSION="$(shell go list -m -f '{{.GoVersion}}')" -f ./packaging/docker/Dockerfile.fips -t apm-server-fips-image-temp .
 	docker container create --name apm-server-fips-cont apm-server-fips-image-temp
 	mkdir -p build
 	docker cp apm-server-fips-cont:/usr/share/apm-server/apm-server "build/apm-server-fips-$(GOOS)-$(GOARCH)"
@@ -81,7 +82,7 @@ $(APM_SERVER_BINARIES):
 .PHONY: apm-server-build
 apm-server-build:
 	env CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) MS_GOTOOLCHAIN_TELEMETRY_ENABLED=0 \
-	go build -o "build/apm-server-$(GOOS)-$(GOARCH)$(SUFFIX)$(EXTENSION)" -trimpath $(GOFLAGS) -tags=grpcnotrace,$(GOTAGS) $(GOMODFLAG) -ldflags "$(LDFLAGS)" $(PKG)
+	go build -o "build/apm-server-$(GOOS)-$(GOARCH)$(SUFFIX)$(EXTENSION)" -trimpath $(GOFLAGS) -tags=$(DEFAULT_TAGS),$(GOTAGS) $(GOMODFLAG) -ldflags "$(LDFLAGS)" $(PKG)
 
 build/apm-server-linux-% build/apm-server-fips-linux-%: GOOS=linux
 build/apm-server-darwin-%: GOOS=darwin
@@ -125,13 +126,13 @@ apm-server apm-server-oss apm-server-fips apm-server-fips-msft:
 
 .PHONY: test
 test:
-	@go test $(GOMODFLAG) $(GOTESTFLAGS) -race ./...
+	@go test $(GOMODFLAG) $(GOTESTFLAGS) -tags=$(DEFAULT_TAGS),$(GOTAGS) -race ./...
 
 .PHONY: system-test
 system-test:
 	# CGO is disabled when building APM Server binary, so the race detector in this case
 	# would only work on the parts that don't involve APM Server binary.
-	@(cd systemtest; go test $(GOMODFLAG) $(GOTESTFLAGS) -race -timeout=20m ./...)
+	@(cd systemtest; go test $(GOMODFLAG) $(GOTESTFLAGS) -tags=$(DEFAULT_TAGS),$(GOTAGS) -race -timeout=20m ./...)
 
 .PHONY:
 clean:
@@ -278,10 +279,10 @@ gofmt: add-headers
 ##############################################################################
 
 MODULE_DEPS=$(sort $(shell \
-  go list -deps -tags=darwin,linux,windows -f "{{with .Module}}{{if not .Main}}{{.Path}}{{end}}{{end}}" ./x-pack/apm-server))
+  CGO_ENABLED=0 go list -deps -tags=darwin,linux,windows,$(DEFAULT_TAGS) -f "{{with .Module}}{{if not .Main}}{{.Path}}{{end}}{{end}}" ./x-pack/apm-server))
 
 MODULE_DEPS_FIPS=$(sort $(shell \
-  go list -deps -tags=darwin,linux,windows,requirefips -f "{{with .Module}}{{if not .Main}}{{.Path}}{{end}}{{end}}" ./x-pack/apm-server))
+  CGO_ENABLED=1 go list -deps -tags=linux,requirefips,$(DEFAULT_TAGS) -f "{{with .Module}}{{if not .Main}}{{.Path}}{{end}}{{end}}" ./x-pack/apm-server))
 
 notice: NOTICE.txt NOTICE-fips.txt
 NOTICE.txt build/dependencies-$(APM_SERVER_VERSION).csv: go.mod
@@ -294,6 +295,7 @@ NOTICE.txt build/dependencies-$(APM_SERVER_VERSION).csv: go.mod
 		-noticeOut NOTICE.txt \
 		-depsTemplate tools/notice/dependencies.csv.tmpl \
 		-depsOut build/dependencies-$(APM_SERVER_VERSION).csv
+	tr -d '\r' < NOTICE.txt > NOTICE.txt.tmp && mv NOTICE.txt.tmp NOTICE.txt
 
 NOTICE-fips.txt build/dependencies-$(APM_SERVER_VERSION)-fips.csv: go.mod
 	mkdir -p build/
@@ -305,6 +307,7 @@ NOTICE-fips.txt build/dependencies-$(APM_SERVER_VERSION)-fips.csv: go.mod
 		-noticeOut NOTICE-fips.txt \
 		-depsTemplate tools/notice/dependencies.csv.tmpl \
 		-depsOut build/dependencies-$(APM_SERVER_VERSION)-fips.csv
+	tr -d '\r' < NOTICE-fips.txt > NOTICE-fips.txt.tmp && mv NOTICE-fips.txt.tmp NOTICE-fips.txt
 
 ##############################################################################
 # Rules for creating and installing build tools.
@@ -371,19 +374,6 @@ ifndef UPGRADE_PATH
 	$(error UPGRADE_PATH is not set)
 endif
 	@cd integrationservertest && go test -run=TestUpgrade -v -timeout=90m -cleanup-on-failure=true -target="pro" -upgrade-path="$(UPGRADE_PATH)" ./
-
-# Run integration server standalone test on one scenario - Managed7 / Managed8 / Managed9
-.PHONY: integration-server-test/standalone
-integration-server-test/standalone:
-ifndef SCENARIO
-	$(error SCENARIO is not set)
-endif
-	@cd integrationservertest && go test -run=TestStandaloneManaged.*/$(SCENARIO) -v -timeout=90m -cleanup-on-failure=true -target="pro" ./
-
-# Run integration server standalone test on all scenarios
-.PHONY: integration-server-test/standalone-all
-integration-server-test/standalone-all:
-	@cd integrationservertest && go test -run=TestStandaloneManaged -v -timeout=90m -cleanup-on-failure=true -target="pro" ./
 
 ##############################################################################
 # Generating and linting API documentation

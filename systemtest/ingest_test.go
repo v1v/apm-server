@@ -176,6 +176,21 @@ func TestIngestPipelineEventSuccessCount(t *testing.T) {
 "processor": {"event": "transaction"}, "event": {"outcome": "unknown"}}`,
 			eventSuccessCountNull: true,
 		},
+		{
+			source: `{"@timestamp": "2022-02-15", "observer": {"version": "8.2.0"}, 
+"processor": {"event": "transaction"}, "transaction": {"representative_count": 2}, "event": {"outcome": "success"}}`,
+			eventSuccessCountVal: 2,
+		},
+		{
+			source: `{"@timestamp": "2022-02-15", "observer": {"version": "8.2.0"}, 
+"processor": {"event": "span"}, "span": {"representative_count": 3}, "event": {"outcome": "success"}}`,
+			eventSuccessCountVal: 3,
+		},
+		{
+			source: `{"@timestamp": "2022-02-15", "observer": {"version": "8.2.0"}, 
+"processor": {"event": "span"}, "span": {"representative_count": null}, "event": {"outcome": "success"}}`,
+			eventSuccessCountVal: 1,
+		},
 	}
 
 	for _, test := range tests {
@@ -206,6 +221,47 @@ func TestIngestPipelineEventSuccessCount(t *testing.T) {
 			assert.Equal(t, test.eventSuccessCountVal, int(successCount.Value().(float64)))
 		}
 	}
+}
+
+// TestTimestampUSMapping is a regression test for github.com/elastic/apm-server/issues/20496.
+// timestamp.us must be mapped as long (not float) even when the value arrives as float
+// (e.g. from json.Unmarshal exponential notation).
+func TestTimestampUSMapping(t *testing.T) {
+	const timestampUS int64 = 1772469840000000
+	source := `{"@timestamp": "2022-02-15", "observer": {"version": "8.2.0"}, "processor": {"event": "transaction"}, "timestamp": {"us": 1772469840000000.0}}`
+
+	var indexResponse struct {
+		Index string `json:"_index"`
+		ID    string `json:"_id"`
+	}
+	_, err := systemtest.Elasticsearch.Do(context.Background(), esapi.IndexRequest{
+		Index:   "traces-apm-default",
+		Body:    strings.NewReader(source),
+		Refresh: "true",
+	}, &indexResponse)
+	require.NoError(t, err)
+
+	var fieldCaps struct {
+		Fields map[string]map[string]struct {
+			Type string `json:"type"`
+		} `json:"fields"`
+	}
+	_, err = systemtest.Elasticsearch.Do(context.Background(), &esapi.FieldCapsRequest{
+		Index:  []string{"traces-apm*"},
+		Fields: []string{"timestamp.us"},
+	}, &fieldCaps)
+	require.NoError(t, err)
+	longCap, ok := fieldCaps.Fields["timestamp.us"]
+	require.True(t, ok, "timestamp.us missing from field_caps")
+	_, hasLong := longCap["long"]
+	assert.True(t, hasLong, "timestamp.us must be mapped as long, got types: %v", longCap)
+
+	result := estest.ExpectDocs(t, systemtest.Elasticsearch, indexResponse.Index, espoll.TermQuery{
+		Field: "_id",
+		Value: indexResponse.ID,
+	})
+	require.Len(t, result.Hits.Hits, 1)
+	assert.Equal(t, timestampUS, gjson.GetBytes(result.Hits.Hits[0].RawSource, "timestamp.us").Int())
 }
 
 func TestIngestPipelineBackwardCompatibility(t *testing.T) {

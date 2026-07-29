@@ -30,21 +30,21 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"go.elastic.co/apm/v2/stacktrace"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
 	"github.com/elastic/apm-perf/loadgen"
 	loadgencfg "github.com/elastic/apm-perf/loadgen/config"
+
 	"github.com/elastic/apm-server/systemtest/benchtest/expvar"
 )
 
-const waitInactiveTimeout = 60 * time.Second
+const waitInactiveTimeout = time.Minute
 
 // BenchmarkFunc is the benchmark function type accepted by Run.
 type BenchmarkFunc func(*testing.B, *rate.Limiter)
@@ -56,20 +56,35 @@ type benchmark struct {
 	f    BenchmarkFunc
 }
 
+// getLogger returns a logger that does not depend on b.Log because b.Log does not work in testing.Benchmark.
+// See https://github.com/golang/go/issues/32066
+// Log to stdout to avoid interfering with benchmark output in stderr.
+func getLogger() (*zap.Logger, error) {
+	c := zap.NewDevelopmentConfig()
+	c.OutputPaths = []string{"stdout"}
+	return c.Build()
+}
+
 func runBenchmark(f BenchmarkFunc) (testing.BenchmarkResult, bool, bool, error) {
+	logger, err := getLogger()
+	if err != nil {
+		return testing.BenchmarkResult{}, false, false, err
+	}
 	// Run the benchmark. testing.Benchmark will invoke the function
 	// multiple times, but only returns the final result.
 	var failed bool
 	var skipped bool
 	var collector *expvar.Collector
+	var reterr error
 	result := testing.Benchmark(func(b *testing.B) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		var err error
 		server := loadgencfg.Config.ServerURL.String()
-		collector, err = expvar.StartNewCollector(ctx, server, 100*time.Millisecond, zaptest.NewLogger(b))
+		collector, err = expvar.StartNewCollector(ctx, server, 100*time.Millisecond, logger)
 		if err != nil {
-			b.Error(err)
+			reterr = fmt.Errorf("expvar.StartNewCollector error: %w", err)
+			b.Error(reterr)
 			failed = b.Failed()
 			return
 		}
@@ -93,9 +108,11 @@ func runBenchmark(f BenchmarkFunc) (testing.BenchmarkResult, bool, bool, error) 
 		if !b.Failed() {
 			watcher, err := collector.WatchMetric(expvar.ActiveEvents, 0)
 			if err != nil {
-				b.Error(err)
+				reterr = fmt.Errorf("collector.WatchMetric error: %w", err)
+				b.Error(reterr)
 			} else if status := <-watcher; !status {
-				b.Error("failed to wait for APM server to be inactive")
+				reterr = fmt.Errorf("failed to wait for APM server to be inactive")
+				b.Error(reterr)
 			}
 		}
 		failed = b.Failed()
@@ -104,7 +121,7 @@ func runBenchmark(f BenchmarkFunc) (testing.BenchmarkResult, bool, bool, error) 
 	if result.Extra != nil {
 		addExpvarMetrics(&result, collector, benchConfig.Detailed)
 	}
-	return result, failed, skipped, nil
+	return result, failed, skipped, reterr
 }
 
 func addExpvarMetrics(result *testing.BenchmarkResult, collector *expvar.Collector, detailed bool) {
@@ -221,7 +238,7 @@ func Run(allBenchmarks ...BenchmarkFunc) error {
 		serverURL := loadgencfg.Config.ServerURL.String()
 		secretToken := loadgencfg.Config.SecretToken
 		apiKey := loadgencfg.Config.APIKey
-		if err := warmup(agents, benchConfig.WarmupTime, serverURL, secretToken, apiKey); err != nil {
+		if err := warmup(zap.NewNop(), agents, benchConfig.WarmupTime, serverURL, secretToken, apiKey); err != nil {
 			return fmt.Errorf("warm-up failed with %d agents: %v", agents, err)
 		}
 	}
@@ -234,7 +251,8 @@ func Run(allBenchmarks ...BenchmarkFunc) error {
 				profileChan := profiles.record(name)
 				result, failed, skipped, err := runBenchmark(benchmark.f)
 				if err != nil {
-					return err
+					fmt.Fprintf(os.Stderr, "--- FAIL: %s\n", name)
+					return fmt.Errorf("benchmark %q failed: %w", name, err)
 				}
 				if skipped {
 					continue
@@ -256,10 +274,10 @@ func Run(allBenchmarks ...BenchmarkFunc) error {
 
 // warmup sends events to the remote APM Server using the specified number of
 // agents for the specified duration.
-func warmup(agents int, duration time.Duration, url, token, apiKey string) error {
+func warmup(logger *zap.Logger, agents int, duration time.Duration, url, token, apiKey string) error {
 	rl := loadgen.GetNewLimiter(loadgencfg.Config.EventRate.Burst, loadgencfg.Config.EventRate.Interval)
 	h, err := loadgen.NewEventHandler(loadgen.EventHandlerParams{
-		Logger:   zap.NewNop(),
+		Logger:   logger,
 		Protocol: "apm/http",
 		Path:     `apm-*.ndjson`,
 		URL:      url,
@@ -274,19 +292,24 @@ func warmup(agents int, duration time.Duration, url, token, apiKey string) error
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	var wg sync.WaitGroup
-	wg.Add(agents)
+	g, ctx := errgroup.WithContext(ctx)
+
 	for i := 0; i < agents; i++ {
-		go func() {
-			defer wg.Done()
-			sendErr := h.SendBatchesInLoop(ctx)
-			if sendErr != nil && !errors.Is(sendErr, context.DeadlineExceeded) {
-				log.Printf("failed to send batches: %v", sendErr)
+		g.Go(func() error {
+			if sendErr := h.SendBatchesInLoop(ctx); sendErr != nil {
+				if !ignoreWarmupErrors(sendErr) {
+					return fmt.Errorf("error sending batches: %w", sendErr)
+				}
 			}
-		}()
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// If no agent successfully sent requests, return error immediately.
+	// This prevents hanging in WaitUntilServerInactive when the server never receives requests.
+	if err = g.Wait(); err != nil {
+		return fmt.Errorf("some agents failed to send batches: %v", err)
+	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), waitInactiveTimeout)
 	defer cancel()
@@ -294,4 +317,13 @@ func warmup(agents int, duration time.Duration, url, token, apiKey string) error
 		return fmt.Errorf("received error waiting for server inactive: %w", err)
 	}
 	return nil
+}
+
+func ignoreWarmupErrors(err error) bool {
+	// Gateway timeout.
+	if strings.Contains(err.Error(), "unexpected server error: 504") {
+		return true
+	}
+	// General go context errors.
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }

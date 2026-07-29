@@ -1,6 +1,11 @@
 locals {
   moxy_port = "9200"
   bin_path  = "/tmp/moxy"
+
+  # Detect if instance type is ARM (Graviton) based
+  # If we need to change this, remember to grep for other instance type checks in the codebase.
+  is_arm   = can(regex("^(a1|t4g|c6g|c7g|m6g|m7g|r6g|r7g|x2gd)", var.instance_type))
+  ami_arch = local.is_arm ? "arm64" : "x86_64"
 }
 
 data "aws_ami" "worker_ami" {
@@ -9,7 +14,12 @@ data "aws_ami" "worker_ami" {
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-ebs"]
+    values = ["al2023-ami-*-${local.ami_arch}"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
 
@@ -62,12 +72,13 @@ resource "aws_security_group" "main" {
 }
 
 resource "aws_instance" "moxy" {
-  ami                    = data.aws_ami.worker_ami.id
-  instance_type          = var.instance_type
-  subnet_id              = data.aws_subnets.public_subnets.ids[0]
-  vpc_security_group_ids = [aws_security_group.main.id]
-  key_name               = aws_key_pair.provisioner_key.key_name
-  monitoring             = false
+  ami                         = data.aws_ami.worker_ami.id
+  instance_type               = var.instance_type
+  subnet_id                   = data.aws_subnets.public_subnets.ids[0]
+  vpc_security_group_ids      = [aws_security_group.main.id]
+  key_name                    = aws_key_pair.provisioner_key.key_name
+  monitoring                  = false
+  associate_public_ip_address = true
 
   connection {
     type        = "ssh"
@@ -84,7 +95,7 @@ resource "aws_instance" "moxy" {
     inline = [
       "sudo cp ${local.bin_path} moxy",
       "sudo chmod +x moxy",
-      "screen -d -m ./moxy -port=${local.moxy_port} -password=${random_password.moxy_password.result}",
+      "nohup ./moxy -port=${local.moxy_port} -password=${random_password.moxy_password.result} > moxy.log 2>&1 &",
       "sleep 1"
     ]
   }

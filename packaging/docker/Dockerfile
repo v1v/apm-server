@@ -9,12 +9,7 @@ FROM golang:${GOLANG_VERSION} AS builder
 WORKDIR /src
 COPY go.mod go.sum /src/
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
-COPY Makefile *.mk /src/
-COPY cmd /src/cmd
-COPY internal /src/internal
-COPY x-pack /src/x-pack
-COPY .git /src/.git
-COPY script /src/script
+COPY . .
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -24,13 +19,13 @@ COPY --chmod=0644 apm-server.yml ./apm-server.yml
 RUN sed -i 's/127.0.0.1:8200/0.0.0.0:8200/' apm-server.yml
 RUN sed -i 's/localhost:9200/elasticsearch:9200/' apm-server.yml
 
-FROM cgr.dev/chainguard/static:latest@sha256:b00a88ca2a8136cdbd86a8aa834c3f69c17debb295a38055f7babfc2c9f9a02b AS builder-certs
+FROM cgr.dev/chainguard/static:latest@sha256:77d8b8925dc27970ec2f48243f44c7a260d52c49cd778288e4ee97566e0cb75b AS builder-certs
 
 ################################################################################
 # Build stage 1
 # Copy prepared files from the previous stage and complete the image.
 ################################################################################
-FROM registry.access.redhat.com/ubi9/ubi-micro:latest@sha256:aff810919642215e15c993b9bbc110dbcc446608730ad24499dafd9df7a8f8f4
+FROM registry.access.redhat.com/ubi10-micro:latest@sha256:e025b421d29b8ecd86fcfd8a4ad18c0d7de747cbcc4e372f414ba02390b031b6
 ARG TARGETARCH
 ARG BUILD_DATE
 ARG VERSION
@@ -38,33 +33,36 @@ ARG VCS_REF
 
 # Statically defined labels.
 LABEL \
-  org.label-schema.schema-version="1.0" \
-  org.label-schema.vendor="Elastic" \
-  org.label-schema.license="Elastic License" \
-  org.label-schema.name="apm-server" \
-  org.label-schema.url="https://www.elastic.co/apm" \
-  org.label-schema.vcs-url="github.com/elastic/apm-server" \
-  io.k8s.description="Elastic APM Server" \
-  io.k8s.display-name="Apm-Server image" \
-  org.opencontainers.image.licenses="Elastic License" \
+  org.opencontainers.image.authors="obs-ds-intake-services" \
+  org.opencontainers.image.base.name="registry.access.redhat.com/ubi10-micro:latest" \
+  org.opencontainers.image.description="Elastic APM Server" \
+  org.opencontainers.image.documentation="https://www.elastic.co/docs/solutions/observability/apm/apm-server" \
+  org.opencontainers.image.licenses="Elastic-2.0" \
+  org.opencontainers.image.source="https://github.com/elastic/apm-server" \
   org.opencontainers.image.title="Apm-Server" \
+  org.opencontainers.image.url="https://github.com/elastic/apm-server" \
   org.opencontainers.image.vendor="Elastic" \
-  name="apm-server" \
-  maintainer="infra@elastic.co" \
-  vendor="Elastic" \
-  release="1" \
-  url="https://www.elastic.co/apm" \
-  summary="apm-server" \
-  license="Elastic License" \
-  description="Elastic APM Server"
+  io.k8s.description="Elastic APM Server" \
+  io.k8s.display-name="Apm-Server image"
 
 # Dynamic labels, only set in published images.
 LABEL \
-  org.label-schema.build-date=${BUILD_DATE} \
-  org.label-schema.version=${VERSION} \
-  org.label-schema.vcs-ref=${VCS_REF} \
   org.opencontainers.image.created=${BUILD_DATE} \
-  version=${VERSION}
+  org.opencontainers.image.revision=${VCS_REF} \
+  org.opencontainers.image.version=${VERSION}
+
+# Overwrite ubi base image non-standard labels
+LABEL \
+  build-date="" \
+  description="" \
+  maintainer="" \
+  name="" \
+  release="" \
+  summary="" \
+  url="" \
+  vcs-ref="" \
+  vendor="" \
+  version=""
 
 ENV ELASTIC_CONTAINER="true"
 

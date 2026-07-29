@@ -36,8 +36,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/elastic/apm-server/internal/version"
 	"github.com/elastic/beats/v7/libbeat/beat"
+	"github.com/elastic/beats/v7/libbeat/beatmonitoring"
 	"github.com/elastic/beats/v7/libbeat/common/reload"
 	"github.com/elastic/beats/v7/libbeat/management"
 	"github.com/elastic/beats/v7/libbeat/tests/integration"
@@ -51,6 +51,8 @@ import (
 	"github.com/elastic/elastic-agent-libs/paths"
 	"github.com/elastic/go-docappender/v2"
 	"github.com/elastic/go-docappender/v2/docappendertest"
+
+	"github.com/elastic/apm-server/internal/version"
 )
 
 func TestRunnerParams(t *testing.T) {
@@ -423,7 +425,7 @@ func TestRunManager_Reloader(t *testing.T) {
 			}
 			return nil
 		}), nil
-	}, nil, nil, nil, beat.NewMonitoring())
+	}, nil, nil, nil, beatmonitoring.NewMonitoring(), nil)
 	require.NoError(t, err)
 
 	agentInfo := &proto.AgentInfo{
@@ -522,7 +524,8 @@ func TestRunManager_Reloader(t *testing.T) {
 	}, registry, client, logptest.NewTestingLogger(t, "manager"), xpacklbmanagement.WithChangeDebounce(0))
 	require.NoError(t, err)
 
-	err = manager.Start()
+	err = manager.PreInit()
+	manager.PostInit()
 	require.NoError(t, err)
 	defer manager.Stop()
 
@@ -553,7 +556,7 @@ func TestRunManager_Reloader_newRunnerError(t *testing.T) {
 		Logger: logptest.NewTestingLogger(t, "beat"),
 	}, registry, func(_ RunnerParams) (Runner, error) {
 		return nil, errors.New("newRunner error")
-	}, nil, nil, nil, beat.NewMonitoring())
+	}, nil, nil, nil, beatmonitoring.NewMonitoring(), nil)
 	require.NoError(t, err)
 
 	onObserved := func(observed *proto.CheckinObserved, currentIdx int) {
@@ -625,9 +628,9 @@ func TestRunManager_Reloader_newRunnerError(t *testing.T) {
 	}, registry, client, logptest.NewTestingLogger(t, "manager"), xpacklbmanagement.WithChangeDebounce(0))
 	require.NoError(t, err)
 
-	err = manager.Start()
+	err = manager.PreInit()
+	manager.PostInit()
 	require.NoError(t, err)
-	defer manager.Stop()
 
 	select {
 	case msg := <-inputFailedMsg:
@@ -635,6 +638,16 @@ func TestRunManager_Reloader_newRunnerError(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for input failed msg")
 	}
+
+	// Stop manager before test ends to prevent data race.
+	// The manager starts background goroutines that log via t.Log().
+	// If we use defer, the test may finish before Stop() completes,
+	// causing the logger to access test state after the test ends.
+	manager.Stop()
+
+	// Give goroutines time to fully exit after Stop().
+	// Stop() cancels contexts but goroutines may still be logging.
+	time.Sleep(100 * time.Millisecond)
 }
 
 func runBeat(t testing.TB, beat *Beat) (stop func() error) {
@@ -663,6 +676,7 @@ func newBeat(t testing.TB, configYAML string, newRunner NewRunnerFunc) *Beat {
 	beat, err := NewBeat(BeatParams{
 		NewRunner:       newRunner,
 		ElasticLicensed: true,
+		Logger:          logptest.NewTestingLogger(t, ""),
 	})
 	require.NoError(t, err)
 	return beat
@@ -719,8 +733,19 @@ func (m *mockManager) Enabled() bool {
 }
 
 func (m *mockManager) Start() error {
+	if err := m.PreInit(); err != nil {
+		return err
+	}
+	m.PostInit()
+	return nil
+}
+
+func (m *mockManager) PreInit() error {
 	close(m.started)
 	return nil
+}
+
+func (m *mockManager) PostInit() {
 }
 
 func (m *mockManager) Stop() {
